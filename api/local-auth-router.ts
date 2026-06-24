@@ -14,6 +14,7 @@ import {
 import { env } from "./lib/env";
 import { randomBytes, timingSafeEqual, scrypt } from "crypto";
 import { promisify } from "util";
+import { checkRateLimit } from "./rate-limit";
 
 const scryptAsync = promisify(scrypt);
 
@@ -39,7 +40,13 @@ export const localAuthRouter = createRouter({
         email: z.string().email().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Rate limit: 5 registrations per IP per 15 minutes
+      const ip = ctx.req.headers.get("x-forwarded-for")?.split(",")[0].trim()
+        || ctx.req.headers.get("x-real-ip")
+        || "unknown";
+      checkRateLimit(`register:${ip}`, 5, 15 * 60 * 1000);
+
       const existing = await findLocalUserByUsername(input.username);
       if (existing) {
         throw new TRPCError({
@@ -67,6 +74,12 @@ export const localAuthRouter = createRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      // Rate limit: 10 login attempts per IP per 15 minutes
+      const ip = ctx.req.headers.get("x-forwarded-for")?.split(",")[0].trim()
+        || ctx.req.headers.get("x-real-ip")
+        || "unknown";
+      checkRateLimit(`login:${ip}`, 10, 15 * 60 * 1000);
+
       const user = await findLocalUserByUsername(input.username);
       if (!user) {
         throw new TRPCError({

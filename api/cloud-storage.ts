@@ -61,7 +61,16 @@ export async function generateDownloadUrl(key: string, expiresIn: number = 3600)
 }
 
 export async function deleteFile(key: string) {
-  if (useLocalStorage()) return { success: true };
+  if (useLocalStorage()) {
+    // Delete from local filesystem
+    const fs = await import("fs");
+    const path = await import("path");
+    const filePath = path.resolve(process.cwd(), "uploads", key);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    return { success: true };
+  }
 
   const command = new DeleteObjectCommand({
     Bucket: BUCKET,

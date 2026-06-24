@@ -39,3 +39,6 @@ build/
 # Test coverage
 coverage/
 .nyc_output/
+
+# Local file uploads (dev fallback when no S3/OSS configured)
+uploads/

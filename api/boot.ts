@@ -8,6 +8,7 @@ import { createContext } from "./context";
 import { env } from "./lib/env";
 import { createOAuthCallbackHandler } from "./kimi/auth";
 import { Paths } from "@contracts/constants";
+import { registerLocalFileRoutes } from "./local-files";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -32,6 +33,10 @@ app.use("*", cors({
 
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
+
+// Local file upload/download routes (fallback when no S3/OSS configured)
+registerLocalFileRoutes(app);
+
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",
