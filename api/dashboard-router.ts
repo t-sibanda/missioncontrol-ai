@@ -89,7 +89,7 @@ export const dashboardRouter = createRouter({
       })
       .from(schema.scrapingLogs)
       .where(
-        sql`${schema.scrapingLogs.startedAt} >= DATE_SUB(NOW(), INTERVAL 7 DAY)`
+        sql`${schema.scrapingLogs.startedAt} >= NOW() - INTERVAL '7 days'`
       )
       .groupBy(sql`DATE(${schema.scrapingLogs.startedAt})`)
       .orderBy(sql`DATE(${schema.scrapingLogs.startedAt})`);

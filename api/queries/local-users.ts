@@ -22,7 +22,10 @@ export async function findLocalUserById(id: number) {
 }
 
 export async function createLocalUser(data: InsertLocalUser) {
-  const result = await getDb().insert(schema.localUsers).values(data);
+  const result = await getDb()
+    .insert(schema.localUsers)
+    .values(data)
+    .returning({ id: schema.localUsers.id });
   return result;
 }
 

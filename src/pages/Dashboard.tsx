@@ -1,4 +1,5 @@
 import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/useAuth";
 import { Link } from "react-router";
 import { Briefcase, Building2, Send, Target, Globe, ArrowRight, Zap, Shield, Activity, Clock, TrendingUp, Sparkles } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -27,8 +28,9 @@ function StatCard({ title, value, icon: Icon, gradient, iconColor, link, delay }
 function SkeletonCard() { return <div className="card p-5 h-[120px] skeleton" />; }
 
 export default function Dashboard() {
+  const { isAuthenticated } = useAuth();
   const { data: jobStats, isLoading: jobsLoading } = trpc.jobs.stats.useQuery();
-  const { data: appStats, isLoading: appsLoading } = trpc.applications.stats.useQuery(undefined, { retry: false });
+  const { data: appStats, isLoading: appsLoading } = trpc.applications.stats.useQuery(undefined, { retry: false, enabled: isAuthenticated });
   const { data: recentJobs } = trpc.jobs.recent.useQuery({ limit: 6 });
   const { data: companyStats } = trpc.companies.stats.useQuery();
 

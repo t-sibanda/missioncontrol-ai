@@ -12,17 +12,20 @@ import {
   LOCAL_AUTH_COOKIE,
 } from "./local-auth";
 import { env } from "./lib/env";
-import { randomBytes, timingSafeEqual, scryptSync } from "crypto";
+import { randomBytes, timingSafeEqual, scrypt } from "crypto";
+import { promisify } from "util";
 
-function hashPassword(password: string): string {
+const scryptAsync = promisify(scrypt);
+
+async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
+  const hash = (await scryptAsync(password, salt, 64) as Buffer).toString("hex");
   return `${salt}:${hash}`;
 }
 
-function verifyPassword(password: string, stored: string): boolean {
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const [salt, hash] = stored.split(":");
-  const testHash = scryptSync(password, salt, 64).toString("hex");
+  const testHash = (await scryptAsync(password, salt, 64) as Buffer).toString("hex");
   return timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(testHash, "hex"));
 }
 
@@ -45,7 +48,7 @@ export const localAuthRouter = createRouter({
         });
       }
 
-      const passwordHash = hashPassword(input.password);
+      const passwordHash = await hashPassword(input.password);
       const result = await createLocalUser({
         username: input.username,
         passwordHash,
@@ -53,7 +56,7 @@ export const localAuthRouter = createRouter({
         email: input.email,
       });
 
-      return { success: true, userId: Number(result[0].insertId) };
+      return { success: true, userId: result[0].id };
     }),
 
   login: publicQuery
@@ -72,7 +75,7 @@ export const localAuthRouter = createRouter({
         });
       }
 
-      if (!verifyPassword(input.password, user.passwordHash)) {
+      if (!(await verifyPassword(input.password, user.passwordHash))) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "Invalid username or password",

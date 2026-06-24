@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { createRouter, authedQuery, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
+import { env } from "./lib/env";
 
 // AI Chat completion helper using Kimi Open API
 async function chatCompletion(
@@ -8,12 +9,12 @@ async function chatCompletion(
 ) {
   try {
     const response = await fetch(
-      `${process.env.KIMI_OPEN_URL || "https://open.kimi.com"}/v1/chat/completions`,
+      `${env.kimiOpenUrl || "https://open.kimi.com"}/v1/chat/completions`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.APP_SECRET}`,
+          Authorization: `Bearer ${env.appSecret}`,
         },
         body: JSON.stringify({
           model,
@@ -370,7 +371,7 @@ export const aiRouter = createRouter({
     }),
 
   // Streaming chat (for frontend streaming)
-  streamChat: publicQuery
+  streamChat: authedQuery
     .input(
       z.object({
         messages: z.array(

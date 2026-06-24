@@ -4,7 +4,7 @@ import { useCallback, useMemo } from "react";
 export function useAuth() {
   const utils = trpc.useUtils();
 
-  // Try OAuth auth first
+  // Check OAuth auth (now returns null gracefully instead of throwing)
   const {
     data: oauthUser,
     isLoading: oauthLoading,
@@ -13,19 +13,13 @@ export function useAuth() {
     retry: false,
   });
 
-  // Also check local auth
+  // Check local auth
   const {
     data: localUser,
     isLoading: localLoading,
   } = trpc.localAuth.me.useQuery(undefined, {
     staleTime: 1000 * 60 * 5,
     retry: false,
-  });
-
-  const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: async () => {
-      await utils.invalidate();
-    },
   });
 
   const localLogoutMutation = trpc.localAuth.logout.useMutation({
@@ -35,10 +29,9 @@ export function useAuth() {
   });
 
   const logout = useCallback(() => {
-    logoutMutation.mutate();
     localLogoutMutation.mutate();
-    window.location.reload();
-  }, [logoutMutation, localLogoutMutation]);
+    window.location.href = "/login";
+  }, [localLogoutMutation]);
 
   const isLoading = oauthLoading || localLoading;
 
