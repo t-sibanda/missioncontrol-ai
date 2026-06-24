@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
-import { toast } from "sonner";
-import { Sparkles, Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
+import { Toaster, toast } from "sonner";
+import { Sparkles, Mail, Lock, User, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 export default function Login() {
@@ -9,41 +9,52 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [error, setError] = useState("");
 
   const loginMut = trpc.localAuth.login.useMutation({
     onSuccess: () => {
-      toast.success("Welcome back!");
+      setError("");
       window.location.href = "/";
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      setError(err.message || "Login failed. Please check your email and password.");
+      toast.error(err.message || "Login failed");
+    },
   });
 
   const registerMut = trpc.localAuth.register.useMutation({
     onSuccess: () => {
+      setError("");
       toast.success("Account created! Signing you in...");
       loginMut.mutate({ username: email, password });
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      setError(err.message || "Could not create account. Email may already be in use.");
+      toast.error(err.message || "Registration failed");
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+
     if (!email.trim() || !password.trim()) {
-      toast.error("Please fill in all fields");
+      setError("Please fill in all fields");
       return;
     }
     if (mode === "signup" && password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+      setError("Password must be at least 6 characters");
       return;
     }
+
     if (mode === "signin") {
-      loginMut.mutate({ username: email, password });
+      loginMut.mutate({ username: email.trim(), password });
     } else {
       registerMut.mutate({
-        username: email,
+        username: email.trim(),
         password,
-        displayName: name || email,
-        email: email,
+        displayName: name.trim() || email.trim(),
+        email: email.trim(),
       });
     }
   };
@@ -52,6 +63,8 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(135deg, #FFFBF7 0%, #fff7ed 50%, #fef3c7 100%)" }}>
+      <Toaster position="top-center" />
+
       <div className="w-full max-w-[400px] mx-4">
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: "linear-gradient(135deg, #FF6B35, #FFB800)", boxShadow: "0 8px 24px rgba(255,107,53,0.25)" }}>
@@ -63,17 +76,24 @@ export default function Login() {
 
         <div className="bg-white rounded-2xl border p-6" style={{ borderColor: "#f1f5f9", boxShadow: "0 8px 32px rgba(15,22,41,0.08)" }}>
           <div className="flex rounded-xl p-1 mb-6" style={{ background: "#f8fafc" }}>
-            <button onClick={() => setMode("signin")}
+            <button onClick={() => { setMode("signin"); setError(""); }}
               className={`flex-1 py-2.5 text-[13px] font-semibold rounded-lg transition-all ${mode === "signin" ? "text-white" : "text-[#94a3b8]"}`}
               style={{ background: mode === "signin" ? "linear-gradient(135deg, #FF6B35, #ff8c5a)" : "transparent" }}>
               Sign In
             </button>
-            <button onClick={() => setMode("signup")}
+            <button onClick={() => { setMode("signup"); setError(""); }}
               className={`flex-1 py-2.5 text-[13px] font-semibold rounded-lg transition-all ${mode === "signup" ? "text-white" : "text-[#94a3b8]"}`}
               style={{ background: mode === "signup" ? "linear-gradient(135deg, #FF6B35, #ff8c5a)" : "transparent" }}>
               Get Started
             </button>
           </div>
+
+          {error && (
+            <div className="flex items-center gap-2 p-3 rounded-xl mb-4 text-[12px] font-medium" style={{ background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" }}>
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === "signup" && (
