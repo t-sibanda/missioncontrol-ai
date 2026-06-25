@@ -12,19 +12,31 @@ import { registerLocalFileRoutes } from "./local-files";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
-// CORS - allow Cloudflare Pages and local dev
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "http://localhost:8788",
-];
-// Add production domain from env if set
-if (env.frontendUrl) {
-  allowedOrigins.push(env.frontendUrl);
-}
-
+// CORS - dynamic origin checking
 app.use("*", cors({
-  origin: allowedOrigins,
+  origin: (origin) => {
+    // Allow local dev
+    if (
+      origin === "http://localhost:3000" ||
+      origin === "http://localhost:5173" ||
+      origin === "http://localhost:8788"
+    ) {
+      return origin;
+    }
+    // Allow any Cloudflare Pages preview/production domain
+    if (origin.endsWith(".pages.dev")) {
+      return origin;
+    }
+    // Allow the exact FRONTEND_URL from env
+    if (env.frontendUrl && origin === env.frontendUrl) {
+      return origin;
+    }
+    // Allow Render's own domain (when frontend is served from same origin)
+    if (origin.endsWith(".onrender.com")) {
+      return origin;
+    }
+    return origin;
+  },
   allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization", "x-trpc-source"],
   credentials: true,
