@@ -1,7 +1,3 @@
-import dns from "dns";
-// MUST be first — force IPv4 for all DNS in this process (Render can't reach Supabase over IPv6)
-dns.setDefaultResultOrder("ipv4first");
-
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";

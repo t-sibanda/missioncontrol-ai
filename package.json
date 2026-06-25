@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outdir=dist --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);import dns from 'dns';dns.setDefaultResultOrder('ipv4first');\"",
+    "build": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outdir=dist --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);import _dns from 'dns';_dns.setDefaultResultOrder('ipv4first');\"",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "NODE_ENV=production node --dns-result-order=ipv4first dist/boot.js",
