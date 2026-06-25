@@ -13,6 +13,9 @@ export function getDb() {
     const client = postgres(env.databaseUrl, {
       prepare: false,
       max: 10,
+      connection: {
+        search_path: "public",
+      },
     });
     instance = drizzle(client, { schema: fullSchema });
   }
