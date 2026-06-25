@@ -49,6 +49,33 @@ app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 // Local file upload/download routes (fallback when no S3/OSS configured)
 registerLocalFileRoutes(app);
 
+// Health check endpoint — tests DB connection and returns exact error if any
+app.get("/api/health", async (c) => {
+  const info: Record<string, unknown> = {
+    server: "ok",
+    timestamp: new Date().toISOString(),
+    dbUrl: env.databaseUrl
+      ? env.databaseUrl.replace(/:[^:@]+@/, ":***@") // hide password
+      : "NOT SET",
+  };
+
+  try {
+    const { getDb } = await import("./queries/connection");
+    const db = getDb();
+    const result = await db.execute(
+      require("drizzle-orm").sql`SELECT current_database() as db, current_schema() as schema, now() as time`
+    );
+    info.database = "connected";
+    info.result = result;
+  } catch (err: unknown) {
+    info.database = "FAILED";
+    info.error = err instanceof Error ? err.message : String(err);
+    info.stack = err instanceof Error ? err.stack?.split("\n").slice(0, 5) : undefined;
+  }
+
+  return c.json(info);
+});
+
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",
