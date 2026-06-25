@@ -60,8 +60,9 @@ app.get("/api/health", async (c) => {
   };
 
   try {
-    // Test raw postgres.js connection directly
-    const postgres = (await import("postgres")).default;
+    const { default: dns } = await import("dns");
+    dns.setDefaultResultOrder("ipv4first");
+    const { default: postgres } = await import("postgres");
     const sql = postgres(env.databaseUrl, {
       prepare: false,
       max: 1,

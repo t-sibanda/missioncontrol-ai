@@ -1,8 +1,12 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import dns from "dns";
 import { env } from "../lib/env";
 import * as schema from "@db/schema";
 import * as relations from "@db/relations";
+
+// Force IPv4 resolution — Render's free tier can't reach Supabase over IPv6
+dns.setDefaultResultOrder("ipv4first");
 
 const fullSchema = { ...schema, ...relations };
 
