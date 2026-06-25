@@ -64,6 +64,7 @@ app.get("/api/health", async (c) => {
   };
 
   try {
+    const net = await import("net");
     const { default: postgres } = await import("postgres");
     const sql = postgres(env.databaseUrl, {
       prepare: false,
@@ -72,6 +73,14 @@ app.get("/api/health", async (c) => {
       idle_timeout: 5,
       connect_timeout: 10,
       fetch_types: false,
+      socket: () => {
+        const url = new URL(env.databaseUrl);
+        return net.connect({
+          host: url.hostname,
+          port: parseInt(url.port) || 5432,
+          family: 4,
+        });
+      },
     });
     const result = await sql`SELECT current_database() as db, current_schema() as schema, now() as time`;
     info.database = "connected";
