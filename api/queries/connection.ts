@@ -13,6 +13,7 @@ export function getDb() {
     const client = postgres(env.databaseUrl, {
       prepare: false,
       max: 10,
+      ssl: "require",
       connection: {
         search_path: "public",
       },
