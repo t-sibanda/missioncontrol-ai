@@ -14,11 +14,14 @@ const queryClient = new QueryClient({
   },
 });
 
+// Use VITE_API_URL if set (Cloudflare Pages pointing to Render), otherwise relative path (served from Render directly)
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 const trpcClient = trpc.createClient({
   links: [
-    loggerLink({ enabled: () => true }),
+    loggerLink({ enabled: () => import.meta.env.DEV }),
     httpBatchLink({
-      url: "/api/trpc",
+      url: `${API_BASE}/api/trpc`,
       transformer: superjson,
       headers() {
         return { "x-trpc-source": "react" };
