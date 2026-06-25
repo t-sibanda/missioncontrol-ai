@@ -13,6 +13,8 @@ export function getDb() {
     const client = postgres(env.databaseUrl, {
       prepare: false,
       max: 10,
+      idle_timeout: 20,
+      connect_timeout: 10,
       ssl: { rejectUnauthorized: false },
       connection: {
         search_path: "public",

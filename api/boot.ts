@@ -60,13 +60,19 @@ app.get("/api/health", async (c) => {
   };
 
   try {
-    const { getDb } = await import("./queries/connection");
-    const db = getDb();
-    const result = await db.execute(
-      require("drizzle-orm").sql`SELECT current_database() as db, current_schema() as schema, now() as time`
-    );
+    // Test raw postgres.js connection directly
+    const postgres = (await import("postgres")).default;
+    const sql = postgres(env.databaseUrl, {
+      prepare: false,
+      max: 1,
+      ssl: { rejectUnauthorized: false },
+      idle_timeout: 5,
+      connect_timeout: 10,
+    });
+    const result = await sql`SELECT current_database() as db, current_schema() as schema, now() as time`;
     info.database = "connected";
     info.result = result;
+    await sql.end();
   } catch (err: unknown) {
     info.database = "FAILED";
     info.error = err instanceof Error ? err.message : String(err);
