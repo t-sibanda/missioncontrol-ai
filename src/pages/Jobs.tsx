@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { toast } from "sonner";
-import { Briefcase, Search, Filter, ExternalLink, Star, CheckCircle, X, MapPin, Calendar, Building2, ArrowRight } from "lucide-react";
+import { Briefcase, Search, Filter, ExternalLink, Star, CheckCircle, X, MapPin, Calendar, Building2, ArrowRight, FileText, Send, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Link } from "react-router";
 
 const statusStyles: Record<string, { bg: string; text: string }> = {
@@ -22,6 +23,7 @@ export default function Jobs() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
+  const [selectedJob, setSelectedJob] = useState<any>(null);
   const utils = trpc.useUtils();
   const { data: jobs, isLoading } = trpc.jobs.list.useQuery({ search: search || undefined, status: statusFilter || undefined, sourceType: sourceFilter || undefined, limit: 50 });
   const updateStatus = trpc.jobs.updateStatus.useMutation({
@@ -83,7 +85,7 @@ export default function Jobs() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="text-[14px] font-semibold" style={{ color: "var(--navy)" }}>{job.title}</h3>
+                        <h3 className="text-[14px] font-semibold cursor-pointer hover:underline" style={{ color: "var(--navy)" }} onClick={() => setSelectedJob(job)}>{job.title}</h3>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[11px]" style={{ color: "var(--muted)" }}>
                           {job.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{job.location}</span>}
                           <span className="flex items-center gap-1 capitalize"><Building2 className="w-3 h-3" />{job.sourceType}</span>
@@ -129,6 +131,57 @@ export default function Jobs() {
           {!search && !statusFilter && !sourceFilter && <Link to="/scraper" className="inline-flex items-center gap-1 mt-3 text-[12px] font-bold" style={{ color: "#FF6B35" }}>Go to Scraper <ArrowRight className="w-3 h-3"/></Link>}
         </div>
       )}
+
+      {/* Job Detail Dialog */}
+      <Dialog open={!!selectedJob} onOpenChange={(open) => { if (!open) setSelectedJob(null); }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto rounded-xl border-0 shadow-xl" style={{ background: "var(--white)" }}>
+          {selectedJob && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-[18px] font-bold" style={{ color: "var(--navy)" }}>{selectedJob.title}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="flex flex-wrap items-center gap-3 text-[12px]" style={{ color: "var(--muted)" }}>
+                  {selectedJob.location && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{selectedJob.location}</span>}
+                  <span className="flex items-center gap-1 capitalize"><Building2 className="w-3.5 h-3.5" />{selectedJob.sourceType}</span>
+                  {selectedJob.salaryRange && <span className="font-semibold" style={{ color: "var(--navy)" }}>{selectedJob.salaryRange}</span>}
+                  {selectedJob.remoteStatus && selectedJob.remoteStatus !== "unknown" && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold capitalize" style={{ background: "#d1fae5", color: "#065f46" }}>{selectedJob.remoteStatus}</span>}
+                </div>
+
+                {selectedJob.parsedSkills && Array.isArray(selectedJob.parsedSkills) && selectedJob.parsedSkills.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-bold mb-1.5" style={{ color: "var(--muted)" }}>SKILLS</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(selectedJob.parsedSkills as string[]).map((skill: string) => <span key={skill} className="text-[11px] px-2.5 py-1 rounded-lg border font-medium" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)", color: "var(--slate)" }}>{skill}</span>)}
+                    </div>
+                  </div>
+                )}
+
+                {selectedJob.description && (
+                  <div>
+                    <p className="text-[11px] font-bold mb-1.5" style={{ color: "var(--muted)" }}>DESCRIPTION</p>
+                    <div className="text-[13px] leading-relaxed p-4 rounded-xl border max-h-[300px] overflow-y-auto" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)", color: "var(--slate)" }}>
+                      {selectedJob.description.replace(/<[^>]*>/g, "")}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-2 border-t" style={{ borderColor: "var(--border-light)" }}>
+                  <a href={selectedJob.sourceUrl} target="_blank" rel="noopener noreferrer" className="btn-primary flex-1 justify-center no-underline text-center">
+                    <ExternalLink className="w-4 h-4" /> View & Apply on Site
+                  </a>
+                  <Button variant="ghost" className="h-10 text-[12px] rounded-lg font-semibold" style={{ color: "#059669" }} onClick={() => { updateStatus.mutate({ id: selectedJob.id, status: "applied" }); setSelectedJob(null); }}>
+                    <CheckCircle className="w-4 h-4 mr-1" /> Mark Applied
+                  </Button>
+                  <Link to="/optimizer" className="h-10 px-3 flex items-center gap-1 text-[12px] rounded-lg font-semibold hover:bg-[#faf8f5] transition-colors" style={{ color: "#7c3aed" }}>
+                    <Bot className="w-4 h-4" /> Optimize Resume
+                  </Link>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

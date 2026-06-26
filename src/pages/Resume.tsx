@@ -56,12 +56,19 @@ export default function Resume() {
   const handleVoiceAnalysis = async () => {
     if (!samplesInput.trim() || !selectedProfile) return;
     setIsAnalyzing(true);
-    const samples = samplesInput.split("\n---\n").filter((s) => s.trim());
-    const result = await analyzeVoice.mutateAsync({ samples });
-    if (result.success && selectedProfile) {
-      await updateProfile.mutateAsync({ id: selectedProfile.id, data: { voiceProfile: result.content || "", writingSamples: samples } });
-      toast.success("Voice profile analyzed");
-    } else { toast.error("Analysis failed"); }
+    try {
+      const samples = samplesInput.split("\n---\n").filter((s) => s.trim());
+      if (samples.length === 0) { toast.error("Please paste at least one writing sample"); setIsAnalyzing(false); return; }
+      const result = await analyzeVoice.mutateAsync({ samples });
+      if (result.success && result.content && selectedProfile) {
+        await updateProfile.mutateAsync({ id: selectedProfile.id, data: { voiceProfile: result.content, writingSamples: samples } });
+        toast.success("Voice profile analyzed successfully");
+      } else {
+        toast.error(result.error || "Voice analysis failed — the AI service may be unavailable. Try again later.");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Voice analysis request failed");
+    }
     setIsAnalyzing(false); setSamplesInput("");
   };
 

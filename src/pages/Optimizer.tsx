@@ -39,11 +39,29 @@ export default function Optimizer() {
     if (!defaultProfile) { toast.error("Create a resume profile first"); return; }
     setIsProcessing(true); setResult(null); setParsedResult(null); setAtsResult(null);
     try {
-      if (mode === "parse") { const res = await parseJob.mutateAsync({ description: jobDescription }); if (res.success && res.parsed) setParsedResult(res.parsed as Record<string, unknown>); else toast.error(res.error || "Failed"); }
-      else if (mode === "ats") { const res = await atsScoreMut.mutateAsync({ resumeText: defaultProfile.baseResumeText, jobDescription }); if (res.success && res.content) { try { setAtsResult(JSON.parse(res.content)); } catch { setResult(res.content); } } }
-      else if (mode === "tailor") { const voice = defaultProfile.voiceProfile || "Professional"; const res = await tailorResumeMut.mutateAsync({ baseResume: defaultProfile.baseResumeText, voiceProfile: voice, jobDescription }); if (res.success && res.content) { try { setResult(JSON.stringify(JSON.parse(res.content), null, 2)); } catch { setResult(res.content); } } }
-      else if (mode === "cover") { const voice = defaultProfile.voiceProfile || "Professional"; const res = await generateCoverMut.mutateAsync({ baseResume: defaultProfile.baseResumeText, voiceProfile: voice, jobDescription, companyName: companyName || "the company", jobTitle: jobTitle || "this role" }); if (res.success) setResult(res.content || ""); }
-    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }
+      if (mode === "parse") {
+        const res = await parseJob.mutateAsync({ description: jobDescription });
+        if (res.success && res.parsed) setParsedResult(res.parsed as Record<string, unknown>);
+        else { toast.error(res.error || "AI processing failed"); setResult(`Error: ${res.error || "Unknown error"}`); }
+      }
+      else if (mode === "ats") {
+        const res = await atsScoreMut.mutateAsync({ resumeText: defaultProfile.baseResumeText, jobDescription });
+        if (res.success && res.content) { try { setAtsResult(JSON.parse(res.content)); } catch { setResult(res.content); } }
+        else { toast.error(res.error || "AI processing failed"); setResult(`Error: ${res.error || "Unknown error"}`); }
+      }
+      else if (mode === "tailor") {
+        const voice = defaultProfile.voiceProfile || "Professional";
+        const res = await tailorResumeMut.mutateAsync({ baseResume: defaultProfile.baseResumeText, voiceProfile: voice, jobDescription });
+        if (res.success && res.content) { try { setResult(JSON.stringify(JSON.parse(res.content), null, 2)); } catch { setResult(res.content); } }
+        else { toast.error(res.error || "AI processing failed"); setResult(`Error: ${res.error || "Unknown error"}`); }
+      }
+      else if (mode === "cover") {
+        const voice = defaultProfile.voiceProfile || "Professional";
+        const res = await generateCoverMut.mutateAsync({ baseResume: defaultProfile.baseResumeText, voiceProfile: voice, jobDescription, companyName: companyName || "the company", jobTitle: jobTitle || "this role" });
+        if (res.success && res.content) setResult(res.content);
+        else { toast.error(res.error || "AI processing failed"); setResult(`Error: ${res.error || "Unknown error"}`); }
+      }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); setResult(`Error: ${err instanceof Error ? err.message : "Request failed"}`); }
     setIsProcessing(false);
   };
 
