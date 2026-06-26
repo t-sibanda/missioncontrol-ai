@@ -2,53 +2,106 @@ import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { env } from "./lib/env";
 
-// AI Chat completion helper using Kimi Open API
+// Groq model mapping (free tier models)
+const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+
+// Generic OpenAI-compatible chat completion call
+async function callChatAPI(
+  apiUrl: string,
+  apiKey: string,
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  maxTokens: number = 4000
+): Promise<{ success: boolean; content: string | null; error: string | null }> {
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      temperature: 0.7,
+      max_tokens: maxTokens,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    return { success: false, content: null, error: `API error ${response.status}: ${errorText.slice(0, 200)}` };
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const content = data.choices?.[0]?.message?.content || "";
+  return { success: true, content, error: null };
+}
+
+/**
+ * AI Chat completion with automatic fallback:
+ * 1. Try Groq (free, globally available, fast)
+ * 2. If Groq fails, try Kimi Open API
+ * 3. Return clear error if both fail
+ */
 async function chatCompletion(
   messages: Array<{ role: string; content: string }>,
-  model: string = "moonshot-v1-8k"
+  model?: string
 ) {
-  try {
-    const response = await fetch(
-      `${env.kimiOpenUrl || "https://open.kimi.com"}/v1/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${env.appSecret}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-          temperature: 0.7,
-          max_tokens: 4000,
-        }),
-      }
-    );
+  // Try Groq first (if API key is configured)
+  if (env.groqApiKey) {
+    try {
+      const result = await callChatAPI(
+        GROQ_API_URL,
+        env.groqApiKey,
+        model || GROQ_MODEL,
+        messages
+      );
+      if (result.success) return { success: true as const, error: null, content: result.content };
+      // Groq failed — log and fall through to Kimi
+      console.log(`[AI] Groq failed: ${result.error}, trying Kimi...`);
+    } catch (err) {
+      console.log(`[AI] Groq error: ${err instanceof Error ? err.message : err}, trying Kimi...`);
+    }
+  }
 
-    if (!response.ok) {
-      const errorText = await response.text();
+  // Try Kimi (if configured)
+  if (env.appSecret && env.kimiOpenUrl) {
+    try {
+      const result = await callChatAPI(
+        `${env.kimiOpenUrl}/v1/chat/completions`,
+        env.appSecret,
+        "moonshot-v1-8k",
+        messages
+      );
+      if (result.success) return { success: true as const, error: null, content: result.content };
+      console.log(`[AI] Kimi failed: ${result.error}`);
+      return { success: false as const, error: result.error, content: null };
+    } catch (err) {
       return {
         success: false as const,
-        error: `AI API error: ${response.status} - ${errorText}`,
+        error: `Both AI providers failed. Kimi: ${err instanceof Error ? err.message : "unknown"}`,
         content: null,
       };
     }
+  }
 
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const content = data.choices?.[0]?.message?.content || "";
-    return { success: true as const, error: null, content };
-  } catch (error) {
+  // No AI provider configured
+  if (!env.groqApiKey && !env.appSecret) {
     return {
       success: false as const,
-      error: error instanceof Error ? error.message : "AI request failed",
+      error: "No AI provider configured. Add GROQ_API_KEY (free at console.groq.com) or APP_SECRET (Kimi) to your environment variables.",
       content: null,
     };
   }
+
+  return {
+    success: false as const,
+    error: "AI service unavailable. Please try again later.",
+    content: null,
+  };
 }
 
 // Parse job description to extract key requirements

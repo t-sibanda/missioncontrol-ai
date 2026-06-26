@@ -19,4 +19,6 @@ export const env = {
   frontendUrl: process.env.FRONTEND_URL ?? "",
   supabaseUrl: process.env.SUPABASE_URL ?? "",
   supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY ?? "",
+  // Groq API (free tier, globally accessible fallback)
+  groqApiKey: process.env.GROQ_API_KEY ?? "",
 };
