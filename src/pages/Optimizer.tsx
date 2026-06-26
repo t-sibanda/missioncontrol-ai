@@ -86,14 +86,24 @@ export default function Optimizer() {
         else { toast.error(res.error || "AI processing failed"); setResult(`Error: ${res.error || "Unknown error"}`); }
       }
       else if (mode === "tailor") {
-        const voice = defaultProfile.voiceProfile || "Professional";
-        const res = await tailorResumeMut.mutateAsync({ baseResume: defaultProfile.baseResumeText, voiceProfile: voice, jobDescription });
-        if (res.success && res.content) { try { setResult(JSON.stringify(JSON.parse(res.content), null, 2)); } catch { setResult(res.content); } }
+        const voice = defaultProfile.voiceProfile || "Professional, results-driven, uses metrics and action verbs";
+        const profileData = {
+          fullName: defaultProfile.fullName || undefined,
+          email: defaultProfile.email || undefined,
+          phone: defaultProfile.phone || undefined,
+          linkedInUrl: defaultProfile.linkedInUrl || undefined,
+          portfolioUrl: defaultProfile.portfolioUrl || undefined,
+          certifications: ((defaultProfile.baseResumeJson as Record<string, unknown> | null)?.certifications as Array<{name: string; url?: string}>) || undefined,
+        };
+        const res = await tailorResumeMut.mutateAsync({ baseResume: defaultProfile.baseResumeText, voiceProfile: voice, jobDescription, profileData });
+        if (res.success && res.content) { setResult(res.content); }
         else { toast.error(res.error || "AI processing failed"); setResult(`Error: ${res.error || "Unknown error"}`); }
       }
       else if (mode === "cover") {
-        const voice = defaultProfile.voiceProfile || "Professional";
-        const res = await generateCoverMut.mutateAsync({ baseResume: defaultProfile.baseResumeText, voiceProfile: voice, jobDescription, companyName: companyName || "the company", jobTitle: jobTitle || "this role" });
+        const voice = defaultProfile.voiceProfile || "Professional, confident, and personable";
+        // Include full profile info so the cover letter has accurate contact details
+        const fullResume = `${defaultProfile.baseResumeText}\n\nContact: ${defaultProfile.fullName || ""}, ${defaultProfile.email || ""}, ${defaultProfile.phone || ""}, LinkedIn: ${defaultProfile.linkedInUrl || ""}`;
+        const res = await generateCoverMut.mutateAsync({ baseResume: fullResume, voiceProfile: voice, jobDescription, companyName: companyName || "the company", jobTitle: jobTitle || "this role" });
         if (res.success && res.content) setResult(res.content);
         else { toast.error(res.error || "AI processing failed"); setResult(`Error: ${res.error || "Unknown error"}`); }
       }
@@ -132,14 +142,23 @@ export default function Optimizer() {
 
   const downloadResult = (filename: string) => {
     if (!result) return;
+    // Generate a meaningful filename
+    const name = defaultProfile?.fullName?.replace(/\s+/g, "_") || "Resume";
+    const company = companyName?.replace(/\s+/g, "_") || "Tailored";
+    const finalFilename = mode === "cover"
+      ? `${name}_Cover_Letter_${company}.txt`
+      : `${name}_Resume_${company}.txt`;
+
     const blob = new Blob([result], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = filename;
+    a.download = finalFilename;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success(`Downloaded ${filename}`);
+    toast.success(`Downloaded: ${finalFilename}`);
   };
 
   return (

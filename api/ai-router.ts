@@ -182,63 +182,56 @@ async function tailorResume(
   baseResume: string,
   voiceProfile: string,
   jobDescription: string,
-  parsedRequirements: Record<string, unknown>
+  parsedRequirements: Record<string, unknown>,
+  profileData?: { fullName?: string; email?: string; phone?: string; linkedInUrl?: string; portfolioUrl?: string; certifications?: Array<{name: string; url?: string}> }
 ) {
-  const prompt = `Using the person's voice profile and base resume, rewrite their experience bullet points to match this job description.
+  const contactBlock = profileData ? `
+CONTACT INFORMATION:
+- Name: ${profileData.fullName || "Not provided"}
+- Email: ${profileData.email || "Not provided"}
+- Phone: ${profileData.phone || "Not provided"}
+- LinkedIn: ${profileData.linkedInUrl || "Not provided"}
+- Portfolio: ${profileData.portfolioUrl || "Not provided"}
+${profileData.certifications?.length ? `- Certifications: ${profileData.certifications.map(c => c.name).join(", ")}` : ""}
+` : "";
 
+  const prompt = `Create a COMPLETE, READY-TO-USE tailored resume for this job application. This should be a full document the person can directly submit.
+
+${contactBlock}
 VOICE PROFILE (write in this exact style):
 ${voiceProfile}
 
-BASE RESUME:
+FULL BASE RESUME:
 ${baseResume}
 
-JOB DESCRIPTION:
+TARGET JOB DESCRIPTION:
 ${jobDescription}
 
-EXTRACTED REQUIREMENTS:
-${JSON.stringify(parsedRequirements, null, 2)}
+${Object.keys(parsedRequirements).length > 0 ? `EXTRACTED REQUIREMENTS:\n${JSON.stringify(parsedRequirements, null, 2)}` : ""}
 
 Instructions:
-1. Maintain factual accuracy - do NOT invent skills or experiences
-2. Use the exact voice/tone from the voice profile
-3. Incorporate relevant keywords from the job description naturally
-4. Quantify achievements where possible
-5. Use strong action verbs that match the voice profile
-6. Create 3 variations per role/experience section
+1. Output a COMPLETE resume document with all sections (header, summary, experience, skills, education, certifications)
+2. Use the person's REAL information from their base resume — do NOT invent experiences or skills
+3. Rewrite bullet points to incorporate keywords from the job description naturally
+4. Maintain factual accuracy — only rephrase, don't fabricate
+5. Use the voice/tone from the voice profile
+6. Quantify achievements where possible
+7. Format with clear section headers using CAPS (e.g., PROFESSIONAL SUMMARY, EXPERIENCE, SKILLS, EDUCATION)
+8. Make it ATS-friendly: no tables, no columns, no graphics
+9. Keep it to 1-2 pages worth of content
+10. Include ALL contact information at the top
 
-Return a JSON object with:
-{
-  "tailoredBullets": {
-    "sectionName": ["bullet 1", "bullet 2", "bullet 3"]
-  },
-  "keywordGaps": ["missing keywords"],
-  "atsScore": 85,
-  "suggestions": ["improvement suggestions"]
-}`;
+Output the complete resume as plain text, ready to copy into a Word document. Do NOT include JSON, markdown code blocks, or explanatory text — just the resume itself.`;
 
   const result = await chatCompletion([
     {
       role: "system",
-      content:
-        "You are an expert resume writer who specializes in ATS optimization while maintaining the applicant's authentic voice.",
+      content: "You are an expert resume writer. Output ONLY the complete, formatted resume document. No explanations, no JSON, no code blocks — just the resume text ready to paste into a Word document.",
     },
     { role: "user", content: prompt },
   ]);
 
-  if (!result.success || !result.content) {
-    return result;
-  }
-
-  try {
-    const cleaned = result.content
-      .replace(/```json\n?/g, "")
-      .replace(/```\n?/g, "")
-      .trim();
-    const parsed = JSON.parse(cleaned);
-    return { success: true as const, content: JSON.stringify(parsed), error: null };
-  } catch {
-    return { success: true as const, content: result.content, error: null };
-  }
+  return result;
 }
 
 // Generate cover letter
@@ -362,6 +355,14 @@ export const aiRouter = createRouter({
         voiceProfile: z.string().min(1),
         jobDescription: z.string().min(1),
         parsedRequirements: z.record(z.string(), z.unknown()).optional(),
+        profileData: z.object({
+          fullName: z.string().optional(),
+          email: z.string().optional(),
+          phone: z.string().optional(),
+          linkedInUrl: z.string().optional(),
+          portfolioUrl: z.string().optional(),
+          certifications: z.array(z.object({ name: z.string(), url: z.string().optional() })).optional(),
+        }).optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -369,7 +370,8 @@ export const aiRouter = createRouter({
         input.baseResume,
         input.voiceProfile,
         input.jobDescription,
-        input.parsedRequirements ?? {}
+        input.parsedRequirements ?? {},
+        input.profileData
       );
     }),
 
