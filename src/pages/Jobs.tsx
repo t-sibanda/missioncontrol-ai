@@ -105,7 +105,7 @@ export default function Jobs() {
                         {(job.parsedSkills as string[]).slice(0, 8).map((skill) => <span key={skill} className="text-[10px] px-2 py-0.5 rounded-md border font-medium" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)", color: "var(--slate)" }}>{skill}</span>)}
                       </div>
                     )}
-                    <div className="flex items-center gap-2 mt-3">
+                    <div className="flex items-center gap-2 mt-3 flex-wrap">
                       <Select value={job.status || "new"} onValueChange={(val) => updateStatus.mutate({ id: job.id, status: val as any })}>
                         <SelectTrigger className="h-7 text-[11px] border w-auto rounded-lg" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }}><SelectValue /></SelectTrigger>
                         <SelectContent className="rounded-xl" style={{ background: "var(--white)", borderColor: "var(--border-light)" }}>
@@ -114,6 +114,10 @@ export default function Jobs() {
                       </Select>
                       <Button size="sm" variant="ghost" className="h-7 text-[11px] rounded-lg" style={{ color: "var(--muted)" }} onClick={() => updateStatus.mutate({ id: job.id, status: "saved" })}><Star className="w-3 h-3 mr-1" />Save</Button>
                       <Button size="sm" variant="ghost" className="h-7 text-[11px] rounded-lg font-medium" style={{ color: "#059669" }} onClick={() => updateStatus.mutate({ id: job.id, status: "applied" })}><CheckCircle className="w-3 h-3 mr-1" />Applied</Button>
+                      <Link to={`/optimizer?title=${encodeURIComponent(job.title)}&url=${encodeURIComponent(job.sourceUrl)}${job.description ? `&description=${encodeURIComponent(job.description.replace(/<[^>]*>/g, "").slice(0, 2000))}` : ""}`}
+                        className="h-7 px-2 flex items-center gap-1 text-[11px] rounded-lg font-semibold transition-all hover:bg-[#ede9fe]" style={{ color: "#7c3aed" }}>
+                        <Bot className="w-3 h-3" /> Optimize
+                      </Link>
                     </div>
                   </div>
                 </div>
