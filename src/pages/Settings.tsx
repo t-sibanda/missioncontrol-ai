@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Target, Mail, Bell, Sliders, Save, Loader2, Shield, Star, Cloud, Database, Sparkles } from "lucide-react";
+import { Target, Mail, Bell, Sliders, Save, Loader2, Shield, Star, Cloud, Database, Sparkles, Users, Copy, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function Settings() {
   const { isAuthenticated } = useAuth();
@@ -14,6 +15,30 @@ export default function Settings() {
   const { data: preferences } = trpc.preferences.get.useQuery(undefined, { enabled: isAuthenticated, retry: false });
   const upsert = trpc.preferences.upsert.useMutation({ onSuccess: () => { utils.preferences.get.invalidate(); toast.success("Saved"); }, onError: (err) => toast.error(err.message) });
   const { data: emailStatus } = trpc.email.status.useQuery(undefined, { retry: false, enabled: isAuthenticated });
+
+  // Networking assistant state
+  const [netTargetRole, setNetTargetRole] = useState("");
+  const [netTargetCompany, setNetTargetCompany] = useState("");
+  const [netBackground, setNetBackground] = useState("");
+  const [netPurpose, setNetPurpose] = useState("");
+  const [netType, setNetType] = useState<"linkedin_connection" | "informational_interview" | "warm_intro">("linkedin_connection");
+  const [netResult, setNetResult] = useState<string | null>(null);
+  const [isNetLoading, setIsNetLoading] = useState(false);
+  const networkingMut = trpc.ai.networkingMessage.useMutation();
+
+  const handleNetworking = async () => {
+    if (!netTargetRole.trim() || !netTargetCompany.trim() || !netBackground.trim() || !netPurpose.trim()) {
+      toast.error("Fill in all fields"); return;
+    }
+    setIsNetLoading(true);
+    setNetResult(null);
+    try {
+      const res = await networkingMut.mutateAsync({ targetRole: netTargetRole, targetCompany: netTargetCompany, userBackground: netBackground, purpose: netPurpose, messageType: netType });
+      if (res.success && res.content) setNetResult(res.content);
+      else toast.error(res.error || "Failed to generate message");
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }
+    setIsNetLoading(false);
+  };
 
   const [form, setForm] = useState({ desiredTitles: "", locations: "", salaryMin: "", remotePreference: "any" as "remote"|"hybrid"|"onsite"|"any", keywordsMustHave: "", keywordsExclude: "", companiesTier1: "", companiesTier2: "", companiesTier3: "", autoApplyThreshold: "90", emailForAlerts: "", alertFrequency: "daily" as "instant"|"daily"|"weekly", enableAutoApply: false, enableSemiAutoApply: true });
 
@@ -98,6 +123,51 @@ export default function Settings() {
         <div><label className="text-[11px] font-bold mb-1 flex items-center gap-1" style={{ color: "var(--muted)" }}><Mail className="w-3 h-3" /> Alert Email</label>
           <Input type="email" value={form.emailForAlerts} onChange={(e) => setForm({...form, emailForAlerts: e.target.value})} placeholder="your@email.com" className="h-9 rounded-lg border" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }} />
         </div>
+      </Section>
+
+      {/* Networking Assistant */}
+      <Section icon={Users} title="Networking Assistant" color="#2563eb" bg="linear-gradient(135deg, #dbeafe, #e0e7ff)">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Target's Role</label>
+            <Input value={netTargetRole} onChange={(e) => setNetTargetRole(e.target.value)} placeholder="Engineering Manager" className="h-9 rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }} />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Target's Company</label>
+            <Input value={netTargetCompany} onChange={(e) => setNetTargetCompany(e.target.value)} placeholder="OpenAI" className="h-9 rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }} />
+          </div>
+        </div>
+        <div>
+          <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Your Background (brief)</label>
+          <Input value={netBackground} onChange={(e) => setNetBackground(e.target.value)} placeholder="Senior Engineer with 5 years in data infrastructure" className="h-9 rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }} />
+        </div>
+        <div>
+          <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Purpose of Outreach</label>
+          <Input value={netPurpose} onChange={(e) => setNetPurpose(e.target.value)} placeholder="Learn about the team culture and open roles" className="h-9 rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }} />
+        </div>
+        <div>
+          <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Message Type</label>
+          <Select value={netType} onValueChange={(v) => setNetType(v as typeof netType)}>
+            <SelectTrigger className="h-9 rounded-lg border" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }}><SelectValue /></SelectTrigger>
+            <SelectContent className="rounded-xl" style={{ background: "var(--white)", borderColor: "var(--border-light)" }}>
+              <SelectItem value="linkedin_connection">LinkedIn Connection Request</SelectItem>
+              <SelectItem value="informational_interview">Informational Interview Ask</SelectItem>
+              <SelectItem value="warm_intro">Warm Intro Request Template</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button onClick={handleNetworking} disabled={isNetLoading} className="w-full text-white font-semibold rounded-lg h-10" style={{ background: "#2563eb" }}>
+          {isNetLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating...</> : <><Send className="w-4 h-4 mr-2" />Generate Message</>}
+        </Button>
+        {netResult && (
+          <div className="space-y-2">
+            <div className="rounded-lg p-4 border whitespace-pre-wrap text-[13px] leading-relaxed" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)", color: "var(--slate)" }}>{netResult}</div>
+            <Button size="sm" variant="ghost" className="text-[12px] font-medium" style={{ color: "var(--muted)" }}
+              onClick={() => { navigator.clipboard.writeText(netResult); toast.success("Copied"); }}>
+              <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy Message
+            </Button>
+          </div>
+        )}
       </Section>
 
       <button onClick={handleSave} disabled={upsert.isPending} className="btn-primary w-full justify-center" style={{ height: "44px" }}>

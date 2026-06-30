@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Building2, Plus, Search, Globe, Loader2, Trash2,
   Star, ExternalLink, X, Edit3, TrendingUp, Sparkles,
+  Brain, Copy, CheckCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,9 +37,20 @@ export default function Companies() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<{ name: string; atsPlatform: string; tier: string; careerPageUrl: string; website: string }>({ name: "", atsPlatform: "greenhouse", tier: "3", careerPageUrl: "", website: "" });
+  const [intelOpen, setIntelOpen] = useState(false);
+  const [intelCompany, setIntelCompany] = useState<{ name: string; industry?: string | null }>({ name: "" });
+  const [intelData, setIntelData] = useState<Record<string, unknown> | null>(null);
+  const [isIntelLoading, setIsIntelLoading] = useState(false);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const utils = trpc.useUtils();
+
+  const { data: companies, isLoading } = trpc.companies.list.useQuery(search ? { search } : undefined);
+  const { data: suggestions } = trpc.suggestions.searchCompanies.useQuery(
+    { query: search, limit: 8 },
+    { enabled: search.length > 0 && showSuggestions }
+  );
+  const companyIntelMut = trpc.ai.companyIntel.useMutation();
 
   const { data: companies, isLoading } = trpc.companies.list.useQuery(search ? { search } : undefined);
   const { data: suggestions } = trpc.suggestions.searchCompanies.useQuery(
@@ -104,6 +116,24 @@ export default function Companies() {
   const handleUpdate = () => {
     if (!editingId || !form.name.trim()) { toast.error("Company name is required"); return; }
     updateCompanyMut.mutate({ id: editingId, data: toMutationData(form) });
+  };
+
+  const handleCompanyIntel = async (name: string, industry?: string | null) => {
+    setIntelCompany({ name, industry });
+    setIntelData(null);
+    setIntelOpen(true);
+    setIsIntelLoading(true);
+    try {
+      const res = await companyIntelMut.mutateAsync({ companyName: name, industry: industry || undefined });
+      if (res.success && res.intel) {
+        setIntelData(res.intel as Record<string, unknown>);
+      } else {
+        toast.error(res.error || "Failed to generate intelligence");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    }
+    setIsIntelLoading(false);
   };
 
   return (
@@ -222,6 +252,9 @@ export default function Companies() {
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   )}
+                  <button onClick={() => handleCompanyIntel(company.name, company.industry)} className="p-2 rounded-lg hover:bg-[#ede9fe] transition-all" style={{ color: "#7c3aed" }} title="AI Intelligence">
+                    <Brain className="w-3.5 h-3.5" />
+                  </button>
                   <div className="flex-1" />
                   <button onClick={() => openEdit(company)} className="p-2 rounded-lg hover:bg-[#faf8f5] opacity-0 group-hover:opacity-100 transition-all" style={{ color: "var(--muted)" }}>
                     <Edit3 className="w-3.5 h-3.5" />
@@ -272,6 +305,83 @@ export default function Companies() {
             </DialogTitle>
           </DialogHeader>
           <CompanyForm form={form} setForm={setForm} onSubmit={handleUpdate} isPending={updateCompanyMut.isPending} submitLabel="Save Changes" />
+        </DialogContent>
+      </Dialog>
+
+      {/* Company Intelligence Dialog */}
+      <Dialog open={intelOpen} onOpenChange={setIntelOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] rounded-xl border-0 shadow-xl overflow-y-auto" style={{ background: "var(--white)", boxShadow: "var(--card-shadow-hover)" }}>
+          <DialogHeader>
+            <DialogTitle className="text-[16px] font-bold flex items-center gap-2" style={{ color: "var(--navy)" }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, #ede9fe, #f3e8ff)" }}>
+                <Brain className="w-4 h-4" style={{ color: "#7c3aed" }} />
+              </div>
+              AI Intelligence: {intelCompany.name}
+            </DialogTitle>
+          </DialogHeader>
+          {isIntelLoading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin mb-3" style={{ color: "#7c3aed" }} />
+              <p className="text-[13px] font-medium" style={{ color: "var(--muted)" }}>Generating company dossier...</p>
+            </div>
+          ) : intelData ? (
+            <div className="space-y-4 pt-2">
+              {[
+                { key: "hiringStyle", label: "Hiring Style", color: "#FF6B35" },
+                { key: "interviewProcess", label: "Interview Process", color: "#2563eb" },
+                { key: "languageTone", label: "Language & Tone", color: "#7c3aed" },
+                { key: "recentFocus", label: "Recent Hiring Focus", color: "#047857" },
+                { key: "companyStyle", label: "Company Style", color: "#b45309" },
+              ].map(({ key, label, color }) => intelData[key] ? (
+                <div key={key} className="rounded-lg p-3 border" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.1em] mb-1" style={{ color }}>{label}</p>
+                  <p className="text-[13px] leading-relaxed" style={{ color: "var(--slate)" }}>{String(intelData[key])}</p>
+                </div>
+              ) : null)}
+              {intelData.atsKeywords && Array.isArray(intelData.atsKeywords) && (
+                <div className="rounded-lg p-3 border" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.1em] mb-2" style={{ color: "#059669" }}>ATS Keywords</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(intelData.atsKeywords as string[]).map((kw, i) => (
+                      <span key={i} className="text-[11px] px-2 py-0.5 rounded-md border font-medium" style={{ background: "var(--white)", borderColor: "var(--border-light)", color: "var(--slate)" }}>{kw}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {intelData.cultureSignals && Array.isArray(intelData.cultureSignals) && (
+                <div className="rounded-lg p-3 border" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.1em] mb-2" style={{ color: "#7c3aed" }}>Culture Signals</p>
+                  <ul className="space-y-1">
+                    {(intelData.cultureSignals as string[]).map((signal, i) => (
+                      <li key={i} className="text-[12px] flex items-start gap-2" style={{ color: "var(--slate)" }}>
+                        <CheckCircle className="w-3 h-3 mt-0.5 shrink-0" style={{ color: "#7c3aed" }} />
+                        {signal}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {intelData.tipsForApplicants && Array.isArray(intelData.tipsForApplicants) && (
+                <div className="rounded-lg p-3 border" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.1em] mb-2" style={{ color: "#FF6B35" }}>Tips for Applicants</p>
+                  <ul className="space-y-1">
+                    {(intelData.tipsForApplicants as string[]).map((tip, i) => (
+                      <li key={i} className="text-[12px] flex items-start gap-2" style={{ color: "var(--slate)" }}>
+                        <Sparkles className="w-3 h-3 mt-0.5 shrink-0" style={{ color: "#FF6B35" }} />
+                        {tip}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <Button size="sm" variant="ghost" className="text-[12px] font-medium" style={{ color: "var(--muted)" }}
+                onClick={() => { navigator.clipboard.writeText(JSON.stringify(intelData, null, 2)); toast.success("Intel copied to clipboard"); }}>
+                <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy Full Dossier
+              </Button>
+            </div>
+          ) : (
+            <p className="text-[13px] py-8 text-center" style={{ color: "var(--muted)" }}>No intelligence data available</p>
+          )}
         </DialogContent>
       </Dialog>
     </div>

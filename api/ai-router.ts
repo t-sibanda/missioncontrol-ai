@@ -177,14 +177,197 @@ Provide a comprehensive voice profile that can be used as a system prompt for an
   return result;
 }
 
+// Company style types
+type CompanyStyle = "formal_corporate" | "startup_energy" | "faang_precision" | "mission_driven" | "casual_collaborative";
+
+const STYLE_GUIDES: Record<CompanyStyle, string> = {
+  formal_corporate: "Use formal, polished language. Avoid contractions. Use industry jargon, emphasize process and protocol. Write in third-person where possible. Think Fortune 500 annual report tone.",
+  startup_energy: "Be energetic, direct, and bold. Use shorter sentences. Show passion and impact. Highlight versatility and ownership. Think Y Combinator pitch deck energy.",
+  faang_precision: "Be highly structured and data-driven. Lead with metrics. Use precise technical language. Emphasize scale, systems thinking, and measurable impact. Think Google/Meta engineering blog.",
+  mission_driven: "Emphasize purpose, values alignment, and social impact. Show how work connects to a bigger mission. Use collaborative language. Think nonprofit or impact-driven tech.",
+  casual_collaborative: "Be conversational and approachable. Use 'we' language. Show teamwork and culture fit. Keep things concise but warm. Think modern remote-first company.",
+};
+
+function getStyleInstruction(style?: CompanyStyle): string {
+  if (!style || !STYLE_GUIDES[style]) return "";
+  return `\n\nWRITING STYLE ADJUSTMENT:\n${STYLE_GUIDES[style]}\nAdjust the tone and language of the output to match this style while keeping all content factually accurate.\n`;
+}
+
+// Generate company intelligence dossier
+async function generateCompanyIntel(companyName: string, industry?: string, jobDescription?: string) {
+  const prompt = `Generate a comprehensive company intelligence dossier for "${companyName}"${industry ? ` (${industry} industry)` : ""}.
+
+${jobDescription ? `Context - they have this job posting:\n${jobDescription.slice(0, 1000)}\n` : ""}
+
+Return a JSON object with:
+{
+  "hiringStyle": "description of how they typically hire (speed, process formality, who's involved)",
+  "interviewProcess": "typical interview stages and what to expect at each",
+  "languageTone": "the tone they use in communications and job postings (formal, casual, technical, mission-driven)",
+  "atsKeywords": ["top 10-15 keywords to include for their ATS"],
+  "cultureSignals": ["5-8 cultural values or signals they look for"],
+  "tipsForApplicants": ["4-6 specific tips for standing out"],
+  "companyStyle": "one of: formal_corporate, startup_energy, faang_precision, mission_driven, casual_collaborative",
+  "recentFocus": "what they seem to be focused on hiring for recently"
+}
+
+Return ONLY valid JSON, no markdown formatting.`;
+
+  const result = await chatCompletion([
+    { role: "system", content: "You are an expert recruiter and company researcher. Generate detailed, actionable intelligence about companies' hiring practices." },
+    { role: "user", content: prompt },
+  ]);
+
+  if (!result.success || !result.content) {
+    return { success: false as const, intel: null, error: result.error };
+  }
+
+  try {
+    const cleaned = result.content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const intel = JSON.parse(cleaned);
+    return { success: true as const, intel, error: null };
+  } catch {
+    return { success: false as const, intel: null, error: "Failed to parse AI response" };
+  }
+}
+
+// Generate follow-up email
+async function generateFollowUpEmail(
+  stage: string,
+  daysSinceContact: number,
+  companyName: string,
+  role: string,
+  companyStyle?: CompanyStyle
+) {
+  const styleInstruction = getStyleInstruction(companyStyle);
+  const prompt = `Generate a professional follow-up email for a job application.
+
+Context:
+- Stage: ${stage}
+- Days since last contact: ${daysSinceContact}
+- Company: ${companyName}
+- Role: ${role}
+${styleInstruction}
+
+Write a concise, effective follow-up email that:
+1. References the specific role and stage
+2. Shows continued interest without being pushy
+3. Adds value (mentions something relevant you could contribute)
+4. Has a clear but soft call to action
+5. Is appropriately brief (3-5 short paragraphs max)
+
+Include subject line on the first line prefixed with "Subject: "
+Then a blank line, then the email body.`;
+
+  return chatCompletion([
+    { role: "system", content: "You are an expert career coach who writes compelling follow-up emails that get responses without being annoying." },
+    { role: "user", content: prompt },
+  ]);
+}
+
+// Interview simulation - generate question
+async function generateInterviewQuestion(
+  companyName: string,
+  role: string,
+  interviewType: string
+) {
+  const prompt = `You are an interviewer at ${companyName} conducting a ${interviewType} interview for the ${role} position.
+
+Ask ONE realistic interview question that ${companyName} would actually ask for this type of interview. Make it specific to their company culture and the role.
+
+For behavioral: Use their leadership principles or values
+For technical: Use relevant technical challenges they face
+For system-design: Use a scenario relevant to their scale and domain
+
+Output ONLY the question itself, nothing else. Make it specific and challenging.`;
+
+  return chatCompletion([
+    { role: "system", content: `You are a senior interviewer at ${companyName}. Ask one focused, realistic interview question.` },
+    { role: "user", content: prompt },
+  ]);
+}
+
+// Interview simulation - evaluate answer
+async function evaluateInterviewAnswer(
+  question: string,
+  answer: string,
+  companyName: string,
+  role: string,
+  interviewType: string
+) {
+  const prompt = `As an interviewer at ${companyName} for the ${role} position (${interviewType} interview), evaluate this answer:
+
+QUESTION: ${question}
+
+CANDIDATE'S ANSWER: ${answer}
+
+Provide evaluation in JSON format:
+{
+  "score": 7,
+  "maxScore": 10,
+  "feedback": "Specific feedback on what was good and what needs improvement",
+  "strengths": ["list of strengths in the answer"],
+  "improvements": ["specific things to improve"],
+  "improvedAnswer": "A model answer that would score 9-10, written in first person as the candidate"
+}
+
+Return ONLY valid JSON.`;
+
+  const result = await chatCompletion([
+    { role: "system", content: "You are an expert interviewer providing detailed, constructive feedback on interview answers." },
+    { role: "user", content: prompt },
+  ]);
+
+  if (!result.success || !result.content) {
+    return { success: false as const, evaluation: null, error: result.error };
+  }
+
+  try {
+    const cleaned = result.content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const evaluation = JSON.parse(cleaned);
+    return { success: true as const, evaluation, error: null };
+  } catch {
+    return { success: true as const, evaluation: null, error: null, content: result.content };
+  }
+}
+
+// Generate networking message
+async function generateNetworkingMessage(
+  targetRole: string,
+  targetCompany: string,
+  userBackground: string,
+  purpose: string,
+  messageType: string
+) {
+  const prompt = `Generate a ${messageType} for professional networking.
+
+TARGET: ${targetRole} at ${targetCompany}
+MY BACKGROUND: ${userBackground}
+PURPOSE: ${purpose}
+
+Requirements based on message type:
+- "linkedin_connection": Max 300 characters, personalized, mention something specific
+- "informational_interview": Brief, respectful of their time, specific ask
+- "warm_intro": Template for asking a mutual connection to introduce you
+
+Write the message ready to send. Be genuine, specific, and concise. Avoid generic templates.`;
+
+  return chatCompletion([
+    { role: "system", content: "You are an expert networker who writes messages that actually get responses. You prioritize authenticity, specificity, and brevity." },
+    { role: "user", content: prompt },
+  ]);
+}
+
 // Generate tailored resume bullets
 async function tailorResume(
   baseResume: string,
   voiceProfile: string,
   jobDescription: string,
   parsedRequirements: Record<string, unknown>,
-  profileData?: { fullName?: string; email?: string; phone?: string; linkedInUrl?: string; portfolioUrl?: string; certifications?: Array<{name: string; url?: string}> }
+  profileData?: { fullName?: string; email?: string; phone?: string; linkedInUrl?: string; portfolioUrl?: string; certifications?: Array<{name: string; url?: string}> },
+  companyStyle?: CompanyStyle
 ) {
+  const styleInstruction = getStyleInstruction(companyStyle);
   const contactBlock = profileData ? `
 CONTACT INFORMATION:
 - Name: ${profileData.fullName || "Not provided"}
@@ -196,6 +379,7 @@ ${profileData.certifications?.length ? `- Certifications: ${profileData.certific
 ` : "";
 
   const prompt = `Create a COMPLETE, READY-TO-USE tailored resume for this job application. This should be a full document the person can directly submit.
+${styleInstruction}
 
 ${contactBlock}
 VOICE PROFILE (write in this exact style):
@@ -240,10 +424,12 @@ async function generateCoverLetter(
   voiceProfile: string,
   jobDescription: string,
   companyName: string,
-  jobTitle: string
+  jobTitle: string,
+  companyStyle?: CompanyStyle
 ) {
+  const styleInstruction = getStyleInstruction(companyStyle);
   const prompt = `Write a compelling, personalized cover letter for this job application.
-
+${styleInstruction}
 APPLICANT'S VOICE (match this tone exactly):
 ${voiceProfile}
 
@@ -363,6 +549,7 @@ export const aiRouter = createRouter({
           portfolioUrl: z.string().optional(),
           certifications: z.array(z.object({ name: z.string(), url: z.string().optional() })).optional(),
         }).optional(),
+        companyStyle: z.enum(["formal_corporate", "startup_energy", "faang_precision", "mission_driven", "casual_collaborative"]).optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -371,7 +558,8 @@ export const aiRouter = createRouter({
         input.voiceProfile,
         input.jobDescription,
         input.parsedRequirements ?? {},
-        input.profileData
+        input.profileData,
+        input.companyStyle
       );
     }),
 
@@ -384,6 +572,7 @@ export const aiRouter = createRouter({
         jobDescription: z.string().min(1),
         companyName: z.string().min(1),
         jobTitle: z.string().min(1),
+        companyStyle: z.enum(["formal_corporate", "startup_energy", "faang_precision", "mission_driven", "casual_collaborative"]).optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -392,7 +581,8 @@ export const aiRouter = createRouter({
         input.voiceProfile,
         input.jobDescription,
         input.companyName,
-        input.jobTitle
+        input.jobTitle,
+        input.companyStyle
       );
     }),
 
@@ -406,6 +596,67 @@ export const aiRouter = createRouter({
     )
     .mutation(async ({ input }) => {
       return calculateATSScore(input.resumeText, input.jobDescription);
+    }),
+
+  // Company Intelligence
+  companyIntel: authedQuery
+    .input(z.object({
+      companyName: z.string().min(1),
+      industry: z.string().optional(),
+      jobDescription: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      return generateCompanyIntel(input.companyName, input.industry, input.jobDescription);
+    }),
+
+  // Follow-up email generator
+  generateFollowUp: authedQuery
+    .input(z.object({
+      stage: z.enum(["post-application", "post-phone-screen", "post-interview", "post-offer"]),
+      daysSinceContact: z.number().min(0),
+      companyName: z.string().min(1),
+      role: z.string().min(1),
+      companyStyle: z.enum(["formal_corporate", "startup_energy", "faang_precision", "mission_driven", "casual_collaborative"]).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      return generateFollowUpEmail(input.stage, input.daysSinceContact, input.companyName, input.role, input.companyStyle);
+    }),
+
+  // Interview Simulation - generate question
+  interviewSimulation: authedQuery
+    .input(z.object({
+      companyName: z.string().min(1),
+      role: z.string().min(1),
+      interviewType: z.enum(["behavioral", "technical", "system-design"]),
+    }))
+    .mutation(async ({ input }) => {
+      return generateInterviewQuestion(input.companyName, input.role, input.interviewType);
+    }),
+
+  // Interview Simulation - evaluate answer
+  evaluateAnswer: authedQuery
+    .input(z.object({
+      question: z.string().min(1),
+      answer: z.string().min(1),
+      companyName: z.string().min(1),
+      role: z.string().min(1),
+      interviewType: z.enum(["behavioral", "technical", "system-design"]),
+    }))
+    .mutation(async ({ input }) => {
+      return evaluateInterviewAnswer(input.question, input.answer, input.companyName, input.role, input.interviewType);
+    }),
+
+  // Networking message generator
+  networkingMessage: authedQuery
+    .input(z.object({
+      targetRole: z.string().min(1),
+      targetCompany: z.string().min(1),
+      userBackground: z.string().min(1),
+      purpose: z.string().min(1),
+      messageType: z.enum(["linkedin_connection", "informational_interview", "warm_intro"]),
+    }))
+    .mutation(async ({ input }) => {
+      return generateNetworkingMessage(input.targetRole, input.targetCompany, input.userBackground, input.purpose, input.messageType);
     }),
 
   // General chat for AI assistant

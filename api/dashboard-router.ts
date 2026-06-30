@@ -94,11 +94,60 @@ export const dashboardRouter = createRouter({
       .groupBy(sql`DATE(${schema.scrapingLogs.startedAt})`)
       .orderBy(sql`DATE(${schema.scrapingLogs.startedAt})`);
 
+    // Analytics: Response rate
+    const totalApps = totalApplicationsResult[0]?.count ?? 0;
+    const respondedApps = appStatusCounts
+      .filter(s => s.status !== "pending")
+      .reduce((sum, s) => sum + Number(s.count), 0);
+    const responseRate = totalApps > 0 ? Math.round((respondedApps / totalApps) * 100) : 0;
+
+    // Analytics: Applications this week
+    const appsThisWeekResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.applications)
+      .where(sql`${schema.applications.createdAt} >= NOW() - INTERVAL '7 days'`);
+
+    // Analytics: Applications this month
+    const appsThisMonthResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.applications)
+      .where(sql`${schema.applications.createdAt} >= NOW() - INTERVAL '30 days'`);
+
+    // Analytics: Most active companies (by applications)
+    const mostActiveCompanies = await db
+      .select({
+        companyName: schema.companies.name,
+        count: sql<number>`count(*)`,
+      })
+      .from(schema.applications)
+      .innerJoin(schema.jobs, sql`${schema.applications.jobId} = ${schema.jobs.id}`)
+      .innerJoin(schema.companies, sql`${schema.jobs.companyId} = ${schema.companies.id}`)
+      .groupBy(schema.companies.name)
+      .orderBy(sql`count(*) DESC`)
+      .limit(5);
+
+    // Analytics: Average days in pipeline stages
+    const avgDaysInStage = await db
+      .select({
+        status: schema.applications.responseStatus,
+        avgDays: sql<number>`ROUND(AVG(EXTRACT(EPOCH FROM (${schema.applications.updatedAt} - ${schema.applications.createdAt})) / 86400))`,
+      })
+      .from(schema.applications)
+      .where(sql`${schema.applications.responseStatus} != 'pending'`)
+      .groupBy(schema.applications.responseStatus);
+
     return {
       summary: {
         totalJobs: totalJobsResult[0]?.count ?? 0,
         totalCompanies: totalCompaniesResult[0]?.count ?? 0,
         totalApplications: totalApplicationsResult[0]?.count ?? 0,
+      },
+      analytics: {
+        responseRate,
+        appsThisWeek: appsThisWeekResult[0]?.count ?? 0,
+        appsThisMonth: appsThisMonthResult[0]?.count ?? 0,
+        mostActiveCompanies,
+        avgDaysInStage,
       },
       jobStatusCounts,
       appStatusCounts,

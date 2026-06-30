@@ -5,12 +5,14 @@ import {
   Send, Plus, Calendar, CheckCircle, Clock, Phone, Trophy, XCircle,
   Trash2, ArrowRight, Bot, Loader2, GraduationCap, Lightbulb,
   MessageSquare, Building2, Target, Briefcase, ExternalLink,
+  Mail, Copy, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Link } from "react-router";
+import { Textarea } from "@/components/ui/textarea";
 
 const statusCfg: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
   pending: { bg: "#fef3c7", text: "#92400e", icon: Clock },
@@ -41,6 +43,25 @@ export default function Applications() {
   const [isPrepLoading, setIsPrepLoading] = useState(false);
   const prepEndRef = useRef<HTMLDivElement>(null);
 
+  // Follow-up state
+  const [followUpOpen, setFollowUpOpen] = useState(false);
+  const [followUpStage, setFollowUpStage] = useState<"post-application" | "post-phone-screen" | "post-interview" | "post-offer">("post-application");
+  const [followUpDays, setFollowUpDays] = useState("7");
+  const [followUpCompany, setFollowUpCompany] = useState("");
+  const [followUpRole, setFollowUpRole] = useState("");
+  const [followUpResult, setFollowUpResult] = useState<string | null>(null);
+  const [isFollowUpLoading, setIsFollowUpLoading] = useState(false);
+
+  // Interview simulation state
+  const [simOpen, setSimOpen] = useState(false);
+  const [simCompany, setSimCompany] = useState("");
+  const [simRole, setSimRole] = useState("");
+  const [simType, setSimType] = useState<"behavioral" | "technical" | "system-design">("behavioral");
+  const [simQuestion, setSimQuestion] = useState<string | null>(null);
+  const [simAnswer, setSimAnswer] = useState("");
+  const [simEvaluation, setSimEvaluation] = useState<Record<string, unknown> | null>(null);
+  const [isSimLoading, setIsSimLoading] = useState(false);
+
   const utils = trpc.useUtils();
   const { data: applications, isLoading } = trpc.applications.list.useQuery(statusFilter ? { responseStatus: statusFilter } : undefined, { retry: false });
   const { data: allJobs } = trpc.jobs.list.useQuery({ limit: 200 });
@@ -49,6 +70,9 @@ export default function Applications() {
   const updateApp = trpc.applications.update.useMutation({ onSuccess: () => { utils.applications.list.invalidate(); toast.success("Updated"); }, onError: (err) => toast.error(err.message) });
   const deleteApp = trpc.applications.delete.useMutation({ onSuccess: () => { utils.applications.list.invalidate(); }, onError: (err) => toast.error(err.message) });
   const chatMut = trpc.ai.chat.useMutation();
+  const followUpMut = trpc.ai.generateFollowUp.useMutation();
+  const interviewSimMut = trpc.ai.interviewSimulation.useMutation();
+  const evaluateAnswerMut = trpc.ai.evaluateAnswer.useMutation();
 
   useEffect(() => { prepEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [prepMessages]);
 
@@ -61,6 +85,65 @@ export default function Applications() {
     setPrepStage(stage || "phone_screen");
     setPrepMessages([]);
     setPrepOpen(true);
+  };
+
+  const openFollowUp = (company?: string, role?: string, status?: string) => {
+    setFollowUpCompany(company || "");
+    setFollowUpRole(role || "");
+    setFollowUpResult(null);
+    const stageMap: Record<string, "post-application" | "post-phone-screen" | "post-interview" | "post-offer"> = {
+      pending: "post-application",
+      phone_screen: "post-phone-screen",
+      interview: "post-interview",
+      offer: "post-offer",
+    };
+    setFollowUpStage(stageMap[status || "pending"] || "post-application");
+    setFollowUpOpen(true);
+  };
+
+  const handleGenerateFollowUp = async () => {
+    if (!followUpCompany.trim() || !followUpRole.trim()) { toast.error("Company and role required"); return; }
+    setIsFollowUpLoading(true);
+    try {
+      const res = await followUpMut.mutateAsync({ stage: followUpStage, daysSinceContact: Number(followUpDays) || 7, companyName: followUpCompany, role: followUpRole });
+      if (res.success && res.content) setFollowUpResult(res.content);
+      else toast.error(res.error || "Failed to generate follow-up");
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }
+    setIsFollowUpLoading(false);
+  };
+
+  const openInterviewSim = (company?: string, role?: string) => {
+    setSimCompany(company || "");
+    setSimRole(role || "");
+    setSimQuestion(null);
+    setSimAnswer("");
+    setSimEvaluation(null);
+    setSimOpen(true);
+  };
+
+  const handleGetQuestion = async () => {
+    if (!simCompany.trim() || !simRole.trim()) { toast.error("Company and role required"); return; }
+    setIsSimLoading(true);
+    setSimQuestion(null);
+    setSimAnswer("");
+    setSimEvaluation(null);
+    try {
+      const res = await interviewSimMut.mutateAsync({ companyName: simCompany, role: simRole, interviewType: simType });
+      if (res.success && res.content) setSimQuestion(res.content);
+      else toast.error(res.error || "Failed to generate question");
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }
+    setIsSimLoading(false);
+  };
+
+  const handleEvaluateAnswer = async () => {
+    if (!simQuestion || !simAnswer.trim()) { toast.error("Write your answer first"); return; }
+    setIsSimLoading(true);
+    try {
+      const res = await evaluateAnswerMut.mutateAsync({ question: simQuestion, answer: simAnswer, companyName: simCompany, role: simRole, interviewType: simType });
+      if (res.success && res.evaluation) setSimEvaluation(res.evaluation as Record<string, unknown>);
+      else toast.error(res.error || "Failed to evaluate");
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }
+    setIsSimLoading(false);
   };
 
   const handlePrepChat = async (initialPrompt?: string) => {
@@ -193,6 +276,14 @@ Be specific, actionable, and encouraging. Use bullet points for clarity.`;
                         className="text-[10px] px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all hover:bg-[#ede9fe]" style={{ color: "#7c3aed" }}>
                         <GraduationCap className="w-3 h-3" /> Prep
                       </button>
+                      <button onClick={() => openFollowUp(job?.title?.split(" at ")[1] || "Company", job?.title || "Role", app.responseStatus || "pending")}
+                        className="text-[10px] px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all hover:bg-[#dbeafe]" style={{ color: "#2563eb" }}>
+                        <Mail className="w-3 h-3" /> Follow Up
+                      </button>
+                      <button onClick={() => openInterviewSim(job?.title?.split(" at ")[1] || "Company", job?.title || "Role")}
+                        className="text-[10px] px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all hover:bg-[#d1fae5]" style={{ color: "#047857" }}>
+                        <Zap className="w-3 h-3" /> Practice
+                      </button>
                       {job?.sourceUrl && (
                         <a href={job.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all hover:bg-[#ffedd5]" style={{ color: "#FF6B35" }}>
                           <ExternalLink className="w-3 h-3" /> View Job
@@ -321,6 +412,145 @@ Be specific, actionable, and encouraging. Use bullet points for clarity.`;
                 {isPrepLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Follow-Up Email Dialog */}
+      <Dialog open={followUpOpen} onOpenChange={setFollowUpOpen}>
+        <DialogContent className="max-w-lg rounded-xl border-0 shadow-xl" style={{ background: "var(--white)" }}>
+          <DialogHeader>
+            <DialogTitle className="text-[16px] font-bold flex items-center gap-2" style={{ color: "var(--navy)" }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, #dbeafe, #e0e7ff)" }}>
+                <Mail className="w-4 h-4" style={{ color: "#2563eb" }} />
+              </div>
+              Generate Follow-Up Email
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Company</label>
+                <Input value={followUpCompany} onChange={(e) => setFollowUpCompany(e.target.value)} placeholder="Company name" className="h-9 rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }} />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Role</label>
+                <Input value={followUpRole} onChange={(e) => setFollowUpRole(e.target.value)} placeholder="Job title" className="h-9 rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Stage</label>
+                <Select value={followUpStage} onValueChange={(v) => setFollowUpStage(v as typeof followUpStage)}>
+                  <SelectTrigger className="h-9 rounded-lg border text-[12px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }}><SelectValue /></SelectTrigger>
+                  <SelectContent className="rounded-xl" style={{ background: "var(--white)", borderColor: "var(--border-light)" }}>
+                    <SelectItem value="post-application">Post-Application</SelectItem>
+                    <SelectItem value="post-phone-screen">Post-Phone Screen</SelectItem>
+                    <SelectItem value="post-interview">Post-Interview</SelectItem>
+                    <SelectItem value="post-offer">Post-Offer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Days Since Contact</label>
+                <Input type="number" value={followUpDays} onChange={(e) => setFollowUpDays(e.target.value)} placeholder="7" className="h-9 rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }} />
+              </div>
+            </div>
+            <Button onClick={handleGenerateFollowUp} disabled={isFollowUpLoading} className="w-full text-white font-semibold rounded-lg h-10" style={{ background: "var(--coral)" }}>
+              {isFollowUpLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating...</> : <><Mail className="w-4 h-4 mr-2" />Generate Follow-Up</>}
+            </Button>
+            {followUpResult && (
+              <div className="space-y-2">
+                <div className="rounded-lg p-4 border whitespace-pre-wrap text-[13px] leading-relaxed max-h-[300px] overflow-y-auto" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)", color: "var(--slate)" }}>{followUpResult}</div>
+                <Button size="sm" variant="ghost" className="text-[12px] font-medium" style={{ color: "var(--muted)" }}
+                  onClick={() => { navigator.clipboard.writeText(followUpResult); toast.success("Copied to clipboard"); }}>
+                  <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy Email
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Interview Simulation Dialog */}
+      <Dialog open={simOpen} onOpenChange={setSimOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] rounded-xl border-0 shadow-xl overflow-y-auto" style={{ background: "var(--white)" }}>
+          <DialogHeader>
+            <DialogTitle className="text-[16px] font-bold flex items-center gap-2" style={{ color: "var(--navy)" }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, #d1fae5, #ecfdf5)" }}>
+                <Zap className="w-4 h-4" style={{ color: "#047857" }} />
+              </div>
+              Interview Practice
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Company</label>
+                <Input value={simCompany} onChange={(e) => setSimCompany(e.target.value)} placeholder="Company" className="h-9 rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }} />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Role</label>
+                <Input value={simRole} onChange={(e) => setSimRole(e.target.value)} placeholder="Job title" className="h-9 rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }} />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Type</label>
+                <Select value={simType} onValueChange={(v) => setSimType(v as typeof simType)}>
+                  <SelectTrigger className="h-9 rounded-lg border text-[12px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }}><SelectValue /></SelectTrigger>
+                  <SelectContent className="rounded-xl" style={{ background: "var(--white)", borderColor: "var(--border-light)" }}>
+                    <SelectItem value="behavioral">Behavioral</SelectItem>
+                    <SelectItem value="technical">Technical</SelectItem>
+                    <SelectItem value="system-design">System Design</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button onClick={handleGetQuestion} disabled={isSimLoading && !simQuestion} className="w-full text-white font-semibold rounded-lg h-10" style={{ background: "#047857" }}>
+              {isSimLoading && !simQuestion ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating...</> : <><Zap className="w-4 h-4 mr-2" />{simQuestion ? "New Question" : "Get Question"}</>}
+            </Button>
+            {simQuestion && (
+              <div className="space-y-3">
+                <div className="rounded-lg p-4 border" style={{ background: "linear-gradient(135deg, #f0fdf4, #ecfdf5)", borderColor: "#86efac" }}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.1em] mb-1" style={{ color: "#047857" }}>Interviewer Question</p>
+                  <p className="text-[14px] font-medium leading-relaxed" style={{ color: "var(--navy)" }}>{simQuestion}</p>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Your Answer</label>
+                  <Textarea value={simAnswer} onChange={(e) => setSimAnswer(e.target.value)} placeholder="Type your answer here... Think about structure (STAR method for behavioral, approach-first for technical)." className="min-h-[120px] rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)", color: "var(--slate)" }} />
+                </div>
+                <Button onClick={handleEvaluateAnswer} disabled={isSimLoading || !simAnswer.trim()} className="w-full text-white font-semibold rounded-lg h-10" style={{ background: "var(--coral)" }}>
+                  {isSimLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Evaluating...</> : <><Target className="w-4 h-4 mr-2" />Get Feedback</>}
+                </Button>
+              </div>
+            )}
+            {simEvaluation && (
+              <div className="space-y-3 pt-2 border-t" style={{ borderColor: "var(--border-light)" }}>
+                <div className="flex items-center gap-3">
+                  <div className="text-[28px] font-extrabold" style={{ color: Number(simEvaluation.score) >= 7 ? "#047857" : Number(simEvaluation.score) >= 5 ? "#b45309" : "#dc2626" }}>
+                    {String(simEvaluation.score)}/{String(simEvaluation.maxScore)}
+                  </div>
+                  <p className="text-[13px] flex-1" style={{ color: "var(--slate)" }}>{String(simEvaluation.feedback)}</p>
+                </div>
+                {simEvaluation.strengths && Array.isArray(simEvaluation.strengths) && (
+                  <div className="rounded-lg p-3 border" style={{ background: "#f0fdf4", borderColor: "#bbf7d0" }}>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.1em] mb-1" style={{ color: "#047857" }}>Strengths</p>
+                    <ul className="space-y-0.5">{(simEvaluation.strengths as string[]).map((s, i) => <li key={i} className="text-[12px]" style={{ color: "var(--slate)" }}>• {s}</li>)}</ul>
+                  </div>
+                )}
+                {simEvaluation.improvements && Array.isArray(simEvaluation.improvements) && (
+                  <div className="rounded-lg p-3 border" style={{ background: "#fef3c7", borderColor: "#fde68a" }}>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.1em] mb-1" style={{ color: "#b45309" }}>Areas to Improve</p>
+                    <ul className="space-y-0.5">{(simEvaluation.improvements as string[]).map((s, i) => <li key={i} className="text-[12px]" style={{ color: "var(--slate)" }}>• {s}</li>)}</ul>
+                  </div>
+                )}
+                {simEvaluation.improvedAnswer && (
+                  <div className="rounded-lg p-3 border" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }}>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.1em] mb-1" style={{ color: "#7c3aed" }}>Model Answer</p>
+                    <p className="text-[12px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--slate)" }}>{String(simEvaluation.improvedAnswer)}</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

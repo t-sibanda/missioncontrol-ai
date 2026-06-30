@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link, useSearchParams } from "react-router";
 
 type ToolMode = "tailor" | "cover" | "ats" | "parse" | "chat";
@@ -35,6 +36,7 @@ export default function Optimizer() {
   const [jobUrl, setJobUrl] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
+  const [companyStyle, setCompanyStyle] = useState<string>("");
   const [result, setResult] = useState<string | null>(null);
   const [parsedResult, setParsedResult] = useState<Record<string, unknown> | null>(null);
   const [atsResult, setAtsResult] = useState<Record<string, unknown> | null>(null);
@@ -54,6 +56,7 @@ export default function Optimizer() {
   const tailorResumeMut = trpc.ai.tailorResume.useMutation();
   const generateCoverMut = trpc.ai.generateCoverLetter.useMutation();
   const chatMut = trpc.ai.chat.useMutation();
+  const createVersionMut = trpc.resume.createVersion.useMutation();
 
   // Pre-fill from URL params (when coming from Jobs page)
   useEffect(() => {
@@ -95,16 +98,24 @@ export default function Optimizer() {
           portfolioUrl: defaultProfile.portfolioUrl || undefined,
           certifications: ((defaultProfile.baseResumeJson as Record<string, unknown> | null)?.certifications as Array<{name: string; url?: string}>) || undefined,
         };
-        const res = await tailorResumeMut.mutateAsync({ baseResume: defaultProfile.baseResumeText, voiceProfile: voice, jobDescription, profileData });
-        if (res.success && res.content) { setResult(res.content); }
+        const res = await tailorResumeMut.mutateAsync({ baseResume: defaultProfile.baseResumeText, voiceProfile: voice, jobDescription, profileData, companyStyle: (companyStyle || undefined) as "formal_corporate" | "startup_energy" | "faang_precision" | "mission_driven" | "casual_collaborative" | undefined });
+        if (res.success && res.content) {
+          setResult(res.content);
+          // Save as version
+          try { await createVersionMut.mutateAsync({ profileId: defaultProfile.id, tailoredResumeText: res.content }); } catch {}
+        }
         else { toast.error(res.error || "AI processing failed"); setResult(`Error: ${res.error || "Unknown error"}`); }
       }
       else if (mode === "cover") {
         const voice = defaultProfile.voiceProfile || "Professional, confident, and personable";
         // Include full profile info so the cover letter has accurate contact details
         const fullResume = `${defaultProfile.baseResumeText}\n\nContact: ${defaultProfile.fullName || ""}, ${defaultProfile.email || ""}, ${defaultProfile.phone || ""}, LinkedIn: ${defaultProfile.linkedInUrl || ""}`;
-        const res = await generateCoverMut.mutateAsync({ baseResume: fullResume, voiceProfile: voice, jobDescription, companyName: companyName || "the company", jobTitle: jobTitle || "this role" });
-        if (res.success && res.content) setResult(res.content);
+        const res = await generateCoverMut.mutateAsync({ baseResume: fullResume, voiceProfile: voice, jobDescription, companyName: companyName || "the company", jobTitle: jobTitle || "this role", companyStyle: (companyStyle || undefined) as "formal_corporate" | "startup_energy" | "faang_precision" | "mission_driven" | "casual_collaborative" | undefined });
+        if (res.success && res.content) {
+          setResult(res.content);
+          // Save as version
+          try { await createVersionMut.mutateAsync({ profileId: defaultProfile.id, coverLetter: res.content }); } catch {}
+        }
         else { toast.error(res.error || "AI processing failed"); setResult(`Error: ${res.error || "Unknown error"}`); }
       }
     } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); setResult(`Error: ${err instanceof Error ? err.message : "Request failed"}`); }
@@ -265,6 +276,22 @@ export default function Optimizer() {
               <div><label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Company</label><Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="OpenAI" className="h-9 rounded-lg border" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }} /></div>
               <div><label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Job Title</label><Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Senior Engineer" className="h-9 rounded-lg border" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }} /></div>
             </div>}
+
+            {(mode === "tailor" || mode === "cover") && (
+              <div>
+                <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Company Style (optional)</label>
+                <Select value={companyStyle} onValueChange={setCompanyStyle}>
+                  <SelectTrigger className="h-9 rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }}><SelectValue placeholder="Auto-detect style..." /></SelectTrigger>
+                  <SelectContent className="rounded-xl" style={{ background: "var(--white)", borderColor: "var(--border-light)" }}>
+                    <SelectItem value="formal_corporate">Formal Corporate (Fortune 500)</SelectItem>
+                    <SelectItem value="startup_energy">Startup Energy (YC, Series A-B)</SelectItem>
+                    <SelectItem value="faang_precision">FAANG Precision (Data-driven)</SelectItem>
+                    <SelectItem value="mission_driven">Mission Driven (Impact-focused)</SelectItem>
+                    <SelectItem value="casual_collaborative">Casual Collaborative (Remote-first)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div>
               <label className="text-[11px] font-bold mb-1 block" style={{ color: "var(--muted)" }}>Job Description (paste the full text)</label>

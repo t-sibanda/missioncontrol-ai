@@ -1,7 +1,7 @@
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { Link } from "react-router";
-import { Briefcase, Building2, Send, Target, Globe, ArrowRight, Zap, Shield, Activity, Clock, TrendingUp, Sparkles } from "lucide-react";
+import { Briefcase, Building2, Send, Target, Globe, ArrowRight, Zap, Shield, Activity, Clock, TrendingUp, Sparkles, BarChart2, Users } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 const COLORS = ["#FF6B35", "#FFB800", "#10b981", "#8b5cf6", "#ef4444", "#06b6d4"];
@@ -33,6 +33,7 @@ export default function Dashboard() {
   const { data: appStats, isLoading: appsLoading } = trpc.applications.stats.useQuery(undefined, { retry: false, enabled: isAuthenticated });
   const { data: recentJobs } = trpc.jobs.recent.useQuery({ limit: 6 });
   const { data: companyStats } = trpc.companies.stats.useQuery();
+  const { data: dashStats } = trpc.dashboard.stats.useQuery(undefined, { retry: false, enabled: isAuthenticated });
 
   const isLoading = jobsLoading || appsLoading;
   const statusData = jobStats?.byStatus.map((s) => ({ name: s.status, count: s.count })) || [];
@@ -116,6 +117,51 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Analytics Section */}
+      {dashStats?.analytics && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 animate-fade-in stagger-3">
+          <div className="card p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--muted)" }}>Response Rate</p>
+            <p className="text-[24px] font-extrabold mt-1" style={{ color: dashStats.analytics.responseRate > 20 ? "#047857" : "#b45309" }}>{dashStats.analytics.responseRate}%</p>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--muted)" }}>Apps with responses</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--muted)" }}>This Week</p>
+            <p className="text-[24px] font-extrabold mt-1" style={{ color: "var(--navy)" }}>{dashStats.analytics.appsThisWeek}</p>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--muted)" }}>Applications sent</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--muted)" }}>This Month</p>
+            <p className="text-[24px] font-extrabold mt-1" style={{ color: "var(--navy)" }}>{dashStats.analytics.appsThisMonth}</p>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--muted)" }}>Applications sent</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--muted)" }}>Avg Stage Time</p>
+            <p className="text-[24px] font-extrabold mt-1" style={{ color: "var(--navy)" }}>
+              {dashStats.analytics.avgDaysInStage.length > 0 ? `${Math.round(dashStats.analytics.avgDaysInStage.reduce((s, a) => s + Number(a.avgDays), 0) / dashStats.analytics.avgDaysInStage.length)}d` : "—"}
+            </p>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--muted)" }}>Per pipeline stage</p>
+          </div>
+        </div>
+      )}
+
+      {/* Most Active Companies */}
+      {dashStats?.analytics?.mostActiveCompanies && dashStats.analytics.mostActiveCompanies.length > 0 && (
+        <div className="card p-5 animate-fade-in stagger-4">
+          <h3 className="text-[13px] font-bold mb-3 flex items-center gap-2" style={{ color: "var(--navy)" }}>
+            <Users className="w-4 h-4" style={{ color: "#7c3aed" }} /> Most Active Companies
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {dashStats.analytics.mostActiveCompanies.map((c, i) => (
+              <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg border" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }}>
+                <span className="text-[12px] font-semibold" style={{ color: "var(--navy)" }}>{c.companyName}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "#ede9fe", color: "#7c3aed" }}>{c.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card p-5 animate-fade-in stagger-4">

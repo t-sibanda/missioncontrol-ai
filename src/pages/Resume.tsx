@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   FileText, Plus, Loader2, Sparkles, Trash2, User, Mail, Phone,
   Link2, Crown, Cloud, Download, CheckCircle, ExternalLink, Upload,
-  Award, Globe, Zap
+  Award, Globe, Zap, History, Briefcase,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,11 @@ export default function Resume() {
 
   const utils = trpc.useUtils();
   const { data: profiles, isLoading } = trpc.resume.listProfiles.useQuery(undefined, { enabled: isAuthenticated, retry: false });
+  const { data: versions } = trpc.resume.listVersions.useQuery(
+    { profileId: selectedProfileId! },
+    { enabled: !!selectedProfileId, retry: false }
+  );
+  const { data: allJobs } = trpc.jobs.list.useQuery({ limit: 200 }, { enabled: isAuthenticated });
 
   const createProfile = trpc.resume.createProfile.useMutation({ onSuccess: () => { utils.resume.listProfiles.invalidate(); setIsAddOpen(false); toast.success("Profile created"); }, onError: (err) => toast.error(err.message) });
   const updateProfile = trpc.resume.updateProfile.useMutation({ onSuccess: () => { utils.resume.listProfiles.invalidate(); toast.success("Saved"); }, onError: (err) => toast.error(err.message) });
@@ -35,6 +40,7 @@ export default function Resume() {
   const setDefault = trpc.resume.setDefaultProfile.useMutation({ onSuccess: () => { utils.resume.listProfiles.invalidate(); toast.success("Default set"); }, onError: (err) => toast.error(err.message) });
   const analyzeVoice = trpc.ai.analyzeVoice.useMutation();
   const getUploadUrl = trpc.storage.getUploadUrl.useMutation();
+  const deleteVersionMut = trpc.resume.deleteVersion.useMutation({ onSuccess: () => { utils.resume.listVersions.invalidate(); toast.success("Version deleted"); }, onError: (err) => toast.error(err.message) });
 
   const selectedProfile = profiles?.find((p) => p.id === selectedProfileId);
 
@@ -257,6 +263,62 @@ export default function Resume() {
                       <p className="text-[12px] text-center py-3" style={{ color: "var(--muted)" }}>No links yet</p>
                     )}
                   </div>
+                </div>
+
+                {/* Document Versions */}
+                <div className="card p-5">
+                  <h3 className="text-[13px] font-semibold mb-3 flex items-center gap-2" style={{ color: "var(--navy)" }}><History className="w-4 h-4" style={{ color: "#2563eb" }} /> Generated Documents</h3>
+                  {versions && versions.length > 0 ? (
+                    <div className="space-y-2">
+                      {versions.map((ver) => {
+                        const job = allJobs?.find(j => j.id === ver.targetJobId);
+                        return (
+                          <div key={ver.id} className="flex items-start gap-3 p-3 rounded-xl border group" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)" }}>
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: ver.coverLetter ? "linear-gradient(135deg, #fef3c7, #fde68a)" : "linear-gradient(135deg, #dbeafe, #e0e7ff)" }}>
+                              {ver.coverLetter ? <FileText className="w-4 h-4" style={{ color: "#b45309" }} /> : <Briefcase className="w-4 h-4" style={{ color: "#2563eb" }} />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[13px] font-semibold truncate" style={{ color: "var(--navy)" }}>
+                                {ver.coverLetter ? "Cover Letter" : "Tailored Resume"}
+                                {job ? ` — ${job.title}` : ver.targetJobId ? ` — Job #${ver.targetJobId}` : ""}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[11px]" style={{ color: "var(--muted)" }}>{new Date(ver.createdAt).toLocaleDateString()}</span>
+                                {ver.atsScore && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "#d1fae5", color: "#047857" }}>ATS: {ver.atsScore}%</span>}
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold capitalize" style={{ background: "#f1f5f9", color: "#475569" }}>{ver.status}</span>
+                              </div>
+                              {(ver.tailoredResumeText || ver.coverLetter) && (
+                                <p className="text-[11px] mt-1 line-clamp-2" style={{ color: "var(--muted)" }}>
+                                  {(ver.coverLetter || ver.tailoredResumeText || "").slice(0, 120)}...
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button onClick={() => {
+                                const content = ver.coverLetter || ver.tailoredResumeText || "";
+                                const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement("a"); a.href = url;
+                                a.download = `${ver.coverLetter ? "cover-letter" : "resume"}-v${ver.id}.txt`;
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                URL.revokeObjectURL(url); toast.success("Downloaded");
+                              }} className="p-1.5 rounded-lg hover:bg-white transition-all" style={{ color: "var(--muted)" }}>
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => { if (confirm("Delete this version?")) deleteVersionMut.mutate({ id: ver.id }); }}
+                                className="p-1.5 rounded-lg hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all" style={{ color: "var(--muted)" }}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-[12px] text-center py-6" style={{ color: "var(--muted)" }}>
+                      No generated documents yet. Use the Optimizer to tailor resumes and cover letters — they'll appear here automatically.
+                    </p>
+                  )}
                 </div>
               </>
             ) : (
