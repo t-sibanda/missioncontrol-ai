@@ -9,6 +9,8 @@ import {
   deleteJob,
   getRecentJobs,
   getJobStats,
+  clearAllJobs,
+  exportAllJobs,
 } from "./queries/jobs";
 
 export const jobsRouter = createRouter({
@@ -167,5 +169,16 @@ export const jobsRouter = createRouter({
 
   stats: publicQuery.query(async () => {
     return getJobStats();
+  }),
+
+  clearAll: authedQuery
+    .input(z.object({ sourceType: z.string().optional() }).optional())
+    .mutation(async ({ input }) => {
+      await clearAllJobs(input?.sourceType);
+      return { success: true };
+    }),
+
+  export: authedQuery.query(async () => {
+    return exportAllJobs();
   }),
 });

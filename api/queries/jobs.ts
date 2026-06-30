@@ -201,3 +201,16 @@ export async function getJobStats() {
     bySource: sourceCounts,
   };
 }
+
+export async function clearAllJobs(sourceType?: string) {
+  const db = getDb();
+  if (sourceType) {
+    await db.delete(schema.jobs).where(eq(schema.jobs.sourceType, sourceType as any));
+  } else {
+    await db.delete(schema.jobs);
+  }
+}
+
+export async function exportAllJobs() {
+  return getDb().select().from(schema.jobs).orderBy(desc(schema.jobs.dateDiscovered));
+}
