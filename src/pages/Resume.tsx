@@ -178,17 +178,24 @@ export default function Resume() {
                 {/* Voice */}
                 <div className="card p-5">
                   <h3 className="text-[13px] font-semibold mb-3 flex items-center gap-2" style={{ color: "var(--navy)" }}><Sparkles className="w-4 h-4" style={{ color: "#8b5cf6" }} /> Voice Profile</h3>
-                  {selectedProfile.voiceProfile ? (
-                    <div className="rounded-lg p-4 border text-[13px] leading-relaxed" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)", color: "var(--slate)" }}>{selectedProfile.voiceProfile}</div>
-                  ) : (
-                    <div className="space-y-3">
-                      <p className="text-[12px]" style={{ color: "var(--muted)" }}>Paste 1-3 writing samples separated by --- and AI will analyze your voice.</p>
-                      <Textarea value={samplesInput} onChange={(e) => setSamplesInput(e.target.value)} placeholder="Paste samples...&#10;---&#10;Another..." className="min-h-[120px] rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)", color: "var(--slate)" }} />
-                      <Button size="sm" className="rounded-lg text-[12px] font-medium" style={{ background: "#ede9fe", color: "#6d28d9" }} onClick={handleVoiceAnalysis} disabled={isAnalyzing || !samplesInput.trim()}>
-                        {isAnalyzing ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />Analyzing...</> : <><Sparkles className="w-3.5 h-3.5 mr-1" />Analyze Voice</>}
-                      </Button>
-                    </div>
+                  {selectedProfile.voiceProfile && (
+                    <div className="rounded-lg p-4 border text-[13px] leading-relaxed mb-3" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)", color: "var(--slate)" }}>{selectedProfile.voiceProfile}</div>
                   )}
+                  <div className="space-y-3">
+                    <p className="text-[12px]" style={{ color: "var(--muted)" }}>{selectedProfile.voiceProfile ? "Update your voice profile by pasting new writing samples below." : "Paste 1-3 writing samples separated by --- and AI will analyze your voice."}</p>
+                    <Textarea value={samplesInput} onChange={(e) => setSamplesInput(e.target.value)} placeholder="Paste samples...&#10;---&#10;Another sample..." className="min-h-[120px] rounded-lg border text-[13px]" style={{ background: "var(--bg-input)", borderColor: "var(--border-light)", color: "var(--slate)" }} />
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" className="rounded-lg text-[12px] font-medium" style={{ background: "#ede9fe", color: "#6d28d9" }} onClick={handleVoiceAnalysis} disabled={isAnalyzing || !samplesInput.trim()}>
+                        {isAnalyzing ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />Analyzing...</> : <><Sparkles className="w-3.5 h-3.5 mr-1" />{selectedProfile.voiceProfile ? "Re-analyze Voice" : "Analyze Voice"}</>}
+                      </Button>
+                      {selectedProfile.voiceProfile && (
+                        <Button size="sm" variant="ghost" className="rounded-lg text-[12px] font-medium" style={{ color: "var(--danger)" }}
+                          onClick={() => { updateProfile.mutate({ id: selectedProfile.id, data: { voiceProfile: "" } }); toast.success("Voice profile cleared"); }}>
+                          Clear Voice
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Contact */}

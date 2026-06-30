@@ -25,9 +25,26 @@ export default function Jobs() {
   const [sourceFilter, setSourceFilter] = useState("");
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const utils = trpc.useUtils();
-  const { data: jobs, isLoading } = trpc.jobs.list.useQuery({ search: search || undefined, status: statusFilter || undefined, sourceType: sourceFilter || undefined, limit: 50 });
+  const { data: jobs, isLoading, refetch } = trpc.jobs.list.useQuery({
+    search: search || undefined,
+    status: statusFilter || undefined,
+    sourceType: sourceFilter || undefined,
+    limit: 100,
+  });
+  const createApp = trpc.applications.create.useMutation({
+    onSuccess: () => { utils.applications.list.invalidate(); },
+  });
   const updateStatus = trpc.jobs.updateStatus.useMutation({
-    onSuccess: () => { utils.jobs.list.invalidate(); toast.success("Status updated"); },
+    onSuccess: (_, variables) => {
+      utils.jobs.list.invalidate();
+      // Auto-create application when marking as "applied"
+      if (variables.status === "applied") {
+        createApp.mutate({ jobId: variables.id, applicationMethod: "manual", submittedAt: new Date().toISOString() });
+        toast.success("Marked as applied — added to your Applications pipeline");
+      } else {
+        toast.success("Status updated");
+      }
+    },
     onError: (err) => toast.error(err.message),
   });
 
@@ -36,27 +53,43 @@ export default function Jobs() {
       <div className="flex items-center justify-between animate-fade-in">
         <div>
           <h1 className="page-title">Jobs</h1>
-          <p className="page-subtitle">Browse, filter, and manage job postings</p>
+          <p className="page-subtitle">Browse, filter, and manage job postings · {jobs?.length ?? 0} jobs</p>
         </div>
-        <Link to="/scraper" className="btn-primary">
-          <Building2 className="w-4 h-4" /> Scrape More
-        </Link>
+        <div className="flex items-center gap-2">
+          <button onClick={() => refetch()} className="h-9 px-3 flex items-center gap-1.5 text-[12px] rounded-lg font-semibold border transition-all hover:shadow-sm" style={{ borderColor: "var(--border-light)", color: "var(--slate)" }}>
+            ↻ Refresh
+          </button>
+          <Link to="/scraper" className="btn-primary">
+            <Building2 className="w-4 h-4" /> Scrape More
+          </Link>
+        </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 animate-fade-in stagger-1">
+      {/* Quick filter tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto animate-fade-in stagger-1">
+        {[
+          { label: "All Jobs", value: "" },
+          { label: "New", value: "new" },
+          { label: "Saved ★", value: "saved" },
+          { label: "Matched", value: "matched" },
+          { label: "Applied", value: "applied" },
+          { label: "Interview", value: "interview" },
+        ].map((tab) => (
+          <button key={tab.value} onClick={() => setStatusFilter(tab.value)}
+            className="px-3 py-1.5 rounded-lg text-[12px] font-semibold whitespace-nowrap transition-all"
+            style={{ background: statusFilter === tab.value ? "#FF6B35" : "var(--white)", color: statusFilter === tab.value ? "white" : "var(--slate)", border: statusFilter === tab.value ? "none" : "1px solid var(--border-light)" }}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 animate-fade-in stagger-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--muted)" }} />
-          <Input placeholder="Search jobs by title, description..." value={search} onChange={(e) => setSearch(e.target.value)}
+          <Input placeholder="Search jobs by title, location, skills..." value={search} onChange={(e) => setSearch(e.target.value)}
             className="pl-10 rounded-lg h-10 border" style={{ background: "var(--white)", borderColor: "var(--border-light)" }} />
         </div>
         <div className="flex gap-2">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px] rounded-lg h-10 border" style={{ background: "var(--white)", borderColor: "var(--border-light)" }}><Filter className="w-3.5 h-3.5 mr-1.5" /><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent className="rounded-xl" style={{ background: "var(--white)", borderColor: "var(--border-light)" }}>
-              <SelectItem value="">All Status</SelectItem>
-              {["new","matched","reviewing","applied","saved","interview","rejected"].map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
           <Select value={sourceFilter} onValueChange={setSourceFilter}>
             <SelectTrigger className="w-[140px] rounded-lg h-10 border" style={{ background: "var(--white)", borderColor: "var(--border-light)" }}><Building2 className="w-3.5 h-3.5 mr-1.5" /><SelectValue placeholder="Source" /></SelectTrigger>
             <SelectContent className="rounded-xl" style={{ background: "var(--white)", borderColor: "var(--border-light)" }}>
