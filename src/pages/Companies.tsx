@@ -52,12 +52,6 @@ export default function Companies() {
   );
   const companyIntelMut = trpc.ai.companyIntel.useMutation();
 
-  const { data: companies, isLoading } = trpc.companies.list.useQuery(search ? { search } : undefined);
-  const { data: suggestions } = trpc.suggestions.searchCompanies.useQuery(
-    { query: search, limit: 8 },
-    { enabled: search.length > 0 && showSuggestions }
-  );
-
   const createCompany = trpc.companies.create.useMutation({
     onSuccess: () => { utils.companies.list.invalidate(); setIsAddOpen(false); resetForm(); toast.success("Company added"); },
     onError: (err) => toast.error(err.message),
